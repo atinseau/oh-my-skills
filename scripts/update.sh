@@ -4,22 +4,13 @@
 
 set -euo pipefail
 
-# Configuration
-INSTALL_DIR="$HOME/.oh-my-skills"
+SCRIPT_DIR="$(cd "${BASH_SOURCE[0]%/*}" && pwd)"
+# shellcheck source=lib.sh
+source "$SCRIPT_DIR/lib.sh"
+
+# Updater-specific configuration
 REPO_URL="${REPO_URL:-https://github.com/atinseau/oh-my-skills.git}"
 MODE="manual"
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-log_info()    { echo -e "${BLUE}ℹ${NC} $1"; }
-log_success() { echo -e "${GREEN}✓${NC} $1"; }
-log_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
-log_error()   { echo -e "${RED}✗${NC} $1" >&2; }
 
 parse_args() {
     case "${1:-}" in
@@ -34,13 +25,6 @@ parse_args() {
             exit 1
             ;;
     esac
-}
-
-confirm() {
-    local prompt="$1"
-    local response
-    read -p "$(echo -e "${YELLOW}?${NC}") $prompt (y/n) " response
-    [[ "$response" == "y" || "$response" == "Y" ]]
 }
 
 get_local_version() {
@@ -86,7 +70,6 @@ get_commit_titles_since_release() {
 
 update_repo() {
     local new_version="$1"
-    log_info "Updating oh-my-skills..."
 
     cd "$INSTALL_DIR"
     git checkout "v${new_version}" 2>/dev/null || git checkout "origin/master" 2>/dev/null
@@ -94,11 +77,16 @@ update_repo() {
     log_success "Repository updated to $new_version"
 }
 
-reinstall() {
-    # Re-run install to update skills, commands, and shell sourcing
-    if [[ -f "$INSTALL_DIR/scripts/install.sh" ]]; then
-        bash "$INSTALL_DIR/scripts/install.sh"
-    fi
+apply_update() {
+    local user_shell
+    user_shell=$(detect_shell)
+
+    detect_llms
+    init_registry
+    install_skills
+    install_commands
+    create_shell_sourcing "update"
+    inject_sourcing "$user_shell" "update"
 }
 
 prompt_for_update() {
@@ -107,7 +95,6 @@ prompt_for_update() {
 
     echo ""
     log_warning "Update available: $local_version → $remote_version"
-    log_info "Reason: keep your commands, skills, and fixes in sync with the latest release."
     confirm "Update now to install the latest commands, skills, and fixes?"
 }
 
@@ -144,8 +131,10 @@ main() {
         log_info "Checking for updates..."
     fi
 
-    local local_version=$(get_local_version)
-    local remote_version=$(get_remote_version)
+    local local_version
+    local_version=$(get_local_version)
+    local remote_version
+    remote_version=$(get_remote_version)
 
     if [[ "$MODE" == "manual" ]]; then
         log_info "Local:  $local_version"
@@ -162,11 +151,12 @@ main() {
 
     if [[ "$local_version" != "$remote_version" ]]; then
         if prompt_for_update "$local_version" "$remote_version"; then
+            log_info "Updating oh-my-skills..."
             fetch_repo_metadata
             local commit_titles
             commit_titles=$(get_commit_titles_since_release "$local_version" "$remote_version")
             update_repo "$remote_version"
-            reinstall
+            apply_update
 
             echo ""
             log_success "=== Update Complete ==="

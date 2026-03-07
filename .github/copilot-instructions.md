@@ -13,7 +13,7 @@ bun check-types
 bun run check
 
 # Validate bash script syntax
-bash -n scripts/install.sh && bash -n scripts/uninstall.sh && bash -n scripts/update.sh
+bash -n scripts/lib.sh && bash -n scripts/install.sh && bash -n scripts/uninstall.sh && bash -n scripts/update.sh
 
 # Run all tests (Docker required)
 TESTCONTAINERS_RYUK_DISABLED=true bun test
@@ -24,10 +24,11 @@ TESTCONTAINERS_RYUK_DISABLED=true bun test tests/install.test.ts
 
 ## High-level architecture
 
-- The project is driven by three bash lifecycle scripts in `scripts/`:
-  - `install.sh`: clones/updates into `~/.oh-my-skills`, installs skills into detected CLI locations (`~/.claude/skills`, `~/.copilot/skills`), copies command scripts into `~/.oh-my-skills/commands`, generates `~/.oh-my-skills/shell`, and injects one `source` line into the user shell config.
+- The project is driven by a shared library and three bash lifecycle scripts in `scripts/`:
+  - `lib.sh`: shared library sourced by all three scripts. Contains log helpers, `confirm()`, `detect_shell()`, `detect_llms()`, registry/skills/commands/shell functions. `create_shell_sourcing` and `inject_sourcing` accept a `mode` parameter (`"install"` or `"update"`) to adapt their log output without duplicating logic.
+  - `install.sh`: clones/updates `~/.oh-my-skills`, then calls lib functions to install skills, commands, and shell sourcing in install context.
   - `uninstall.sh`: reads `~/.oh-my-skills/registry.json`, removes only tracked skills that carry the expected marker, removes shell sourcing, and deletes `~/.oh-my-skills`.
-  - `update.sh`: supports manual mode and shell-startup auto-check mode; it compares installed version vs remote git tags, asks for explicit confirmation with a reason when an update is available, then re-runs install and prints commit titles since the previous release as the changelog.
+  - `update.sh`: supports manual mode and shell-startup auto-check mode; compares installed version vs remote git tags, asks for explicit confirmation when an update is available, then calls lib functions directly in update context (not `install.sh`) and prints commit titles since the previous release as the changelog.
 - `registry.json` in the install directory is the runtime state: installed version and copied skill paths per CLI.
 - `~/.oh-my-skills/shell` is the integration point for commands: in interactive shells it runs the auto-update check, then recursively sources every `*.sh` file under `~/.oh-my-skills/commands`.
 - Tests (`tests/*.test.ts`) execute the real bash scripts inside Alpine containers using `testcontainers`; each suite builds a fake remote git repo and validates real filesystem effects.

@@ -25,6 +25,7 @@ describe("oh-my-skills Update (real script)", () => {
 
 		// Copy real scripts
 		exec(id, "mkdir -p /scripts");
+		copyToContainer(id, `${SCRIPTS_DIR}/lib.sh`, "/scripts/lib.sh");
 		copyToContainer(id, `${SCRIPTS_DIR}/install.sh`, "/scripts/install.sh");
 		copyToContainer(id, `${SCRIPTS_DIR}/update.sh`, "/scripts/update.sh");
 		exec(id, "chmod +x /scripts/*.sh");
@@ -126,7 +127,6 @@ describe("oh-my-skills Update (real script)", () => {
 			`echo n | REPO_URL=/tmp/remote-repo bash /scripts/update.sh --auto-check`,
 		);
 		expect(r.output).toContain("Update available");
-		expect(r.output).toContain("Reason: keep your commands, skills, and fixes");
 		expect(r.output).toContain("oms update");
 	});
 
@@ -140,6 +140,15 @@ describe("oh-my-skills Update (real script)", () => {
 		expect(r.output).toContain("Changelog since");
 		expect(r.output).toContain("feat(commands): add bye alias");
 		expect(r.output).toContain("fix(update): improve release sync");
+
+		// Update output must not contain install-specific messages
+		expect(r.output).not.toContain("Installing oh-my-skills");
+		expect(r.output).not.toContain("Already installed");
+		expect(r.output).not.toContain("Installation Complete");
+		// Shell sourcing message should say "updated", not "created"
+		expect(r.output).toContain("Shell sourcing script updated");
+		// Only one "Update Complete" banner
+		expect(r.output.split("Update Complete").length - 1).toBe(1);
 	});
 
 	it("should have updated existing command after update", () => {

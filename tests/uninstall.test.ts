@@ -25,6 +25,7 @@ describe("oh-my-skills Uninstall (real script)", () => {
 
 		// Copy real scripts
 		exec(id, "mkdir -p /scripts");
+		copyToContainer(id, `${SCRIPTS_DIR}/lib.sh`, "/scripts/lib.sh");
 		copyToContainer(id, `${SCRIPTS_DIR}/install.sh`, "/scripts/install.sh");
 		copyToContainer(id, `${SCRIPTS_DIR}/uninstall.sh`, "/scripts/uninstall.sh");
 		exec(id, "chmod +x /scripts/*.sh");
