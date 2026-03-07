@@ -6,6 +6,7 @@ set -euo pipefail
 
 # Configuration
 REPO_URL="${REPO_URL:-https://github.com/atinseau/oh-my-skills.git}"
+DEFAULT_TAG="" # Set by release workflow in tagged installer commits; kept empty on master
 INSTALL_DIR="$HOME/.oh-my-skills"
 CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
 COPILOT_SKILLS_DIR="$HOME/.copilot/skills"
@@ -67,9 +68,10 @@ clone_repo() {
         branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "main")
         git pull origin "$branch" 2>/dev/null || log_warning "Could not update repository"
     else
-        if [[ -n "${TAG:-}" ]]; then
-            git clone --branch "$TAG" --depth 1 "$REPO_URL" "$INSTALL_DIR"
-            log_success "Repository cloned ($TAG) to $INSTALL_DIR"
+        local target_tag="${TAG:-$DEFAULT_TAG}"
+        if [[ -n "$target_tag" ]]; then
+            git clone --branch "$target_tag" --depth 1 "$REPO_URL" "$INSTALL_DIR"
+            log_success "Repository cloned ($target_tag) to $INSTALL_DIR"
         else
             git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
             log_success "Repository cloned to $INSTALL_DIR"
@@ -162,8 +164,8 @@ install_commands() {
 
     # Copy commands to ~/.oh-my-skills/commands/
     mkdir -p "$COMMANDS_DIR"
-    cp -r "$src_commands_dir"/*.sh "$COMMANDS_DIR/" 2>/dev/null || true
-    chmod +x "$COMMANDS_DIR"/*.sh 2>/dev/null || true
+    cp -R "$src_commands_dir"/. "$COMMANDS_DIR"/
+    find "$COMMANDS_DIR" -type f -name "*.sh" -exec chmod +x {} +
     log_success "Commands copied to $COMMANDS_DIR"
 }
 
@@ -176,13 +178,16 @@ create_shell_sourcing() {
 
 _OH_MY_SKILLS_DIR="${HOME}/.oh-my-skills"
 _OH_MY_SKILLS_COMMANDS_DIR="${_OH_MY_SKILLS_DIR}/commands"
+_OH_MY_SKILLS_UPDATE_SCRIPT="${_OH_MY_SKILLS_DIR}/scripts/update.sh"
+
+if [[ "$-" == *i* ]] && [[ -x "$_OH_MY_SKILLS_UPDATE_SCRIPT" ]]; then
+    bash "$_OH_MY_SKILLS_UPDATE_SCRIPT" --auto-check
+fi
 
 if [[ -d "$_OH_MY_SKILLS_COMMANDS_DIR" ]]; then
-    for cmd_file in "$_OH_MY_SKILLS_COMMANDS_DIR"/*.sh; do
-        if [[ -f "$cmd_file" ]]; then
-            source "$cmd_file"
-        fi
-    done
+    while IFS= read -r -d '' cmd_file; do
+        source "$cmd_file"
+    done < <(find "$_OH_MY_SKILLS_COMMANDS_DIR" -type f -name "*.sh" -print0)
 fi
 SHELL_SCRIPT
 
