@@ -10,7 +10,7 @@ source "$SCRIPT_DIR/lib.sh"
 
 # Installer-specific configuration
 REPO_URL="${REPO_URL:-https://github.com/atinseau/oh-my-skills.git}"
-DEFAULT_TAG="v0.0.8" # Set by release workflow in tagged installer commits; kept empty on master
+DEFAULT_TAG="" # Set by release workflow in tagged installer commits; kept empty on master
 
 require_git() {
     if ! command -v git &> /dev/null; then
