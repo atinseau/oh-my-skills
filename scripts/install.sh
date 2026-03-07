@@ -6,7 +6,7 @@ set -euo pipefail
 
 # Configuration
 REPO_URL="${REPO_URL:-https://github.com/atinseau/oh-my-skills.git}"
-VERSION="0.1.0"
+VERSION="0.0.2"
 INSTALL_DIR="$HOME/.oh-my-skills"
 CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
 COPILOT_SKILLS_DIR="$HOME/.copilot/skills"

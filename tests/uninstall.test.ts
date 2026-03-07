@@ -43,7 +43,7 @@ describe("oh-my-skills Uninstall (real script)", () => {
 		);
 		exec(
 			id,
-			"cd /tmp/remote-repo && git add . && git commit -m 'init' && git tag v0.1.0",
+			"cd /tmp/remote-repo && git add . && git commit -m 'init' && git tag v0.0.2",
 		);
 
 		// Fake LLM binaries

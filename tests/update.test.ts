@@ -21,7 +21,7 @@ describe("oh-my-skills Update (real script)", () => {
 		copyToContainer(id, `${SCRIPTS_DIR}/update.sh`, "/scripts/update.sh");
 		exec(id, "chmod +x /scripts/*.sh");
 
-		// Create local repo (v0.1.0)
+		// Create local repo (v0.0.2)
 		exec(id, "mkdir -p /tmp/remote-repo");
 		exec(
 			id,
@@ -43,7 +43,7 @@ describe("oh-my-skills Update (real script)", () => {
 		);
 		exec(
 			id,
-			"cd /tmp/remote-repo && git add . && git commit -m 'v0.1.0' && git tag v0.1.0",
+			"cd /tmp/remote-repo && git add . && git commit -m 'v0.0.2' && git tag v0.0.2",
 		);
 
 		// Fake LLM binaries
@@ -63,15 +63,15 @@ describe("oh-my-skills Update (real script)", () => {
 		if (container) await container.stop();
 	});
 
-	it("should have version 0.1.0 after install", () => {
+	it("should have version 0.0.2 after install", () => {
 		const r = exec(id, `jq -r '.version' ${INSTALL}/registry.json`);
-		expect(r.output).toBe("0.1.0");
+		expect(r.output).toBe("0.0.2");
 	});
 
 	it("should report up-to-date when no update available", () => {
-		// Remote repo still at v0.1.0, local registry says 0.1.0
+		// Remote repo still at v0.0.2, local registry says 0.0.2
 		// update.sh compares local version vs remote tags
-		// Since remote latest tag is v0.1.0 and local is 0.1.0, should be up to date
+		// Since remote latest tag is v0.0.2 and local is 0.0.2, should be up to date
 		const r = exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/update.sh`);
 		expect(r.exitCode).toBe(0);
 		expect(r.output).toContain("up to date");
@@ -89,7 +89,7 @@ describe("oh-my-skills Update (real script)", () => {
 
 	it("should not modify registry when up to date", () => {
 		const r = exec(id, `jq -r '.version' ${INSTALL}/registry.json`);
-		expect(r.output).toBe("0.1.0");
+		expect(r.output).toBe("0.0.2");
 	});
 
 	it("should detect update when remote has new tag", () => {

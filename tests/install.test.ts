@@ -60,7 +60,7 @@ describe("oh-my-skills Install (real script)", () => {
 		// Commit
 		exec(
 			id,
-			"cd /tmp/remote-repo && git add . && git commit -m 'initial' && git tag v0.1.0",
+			"cd /tmp/remote-repo && git add . && git commit -m 'initial' && git tag v0.0.2",
 		);
 
 		// Create fake claude and copilot binaries
@@ -98,7 +98,7 @@ describe("oh-my-skills Install (real script)", () => {
 	it("should have created registry.json with version", () => {
 		const r = exec(id, `cat ${INSTALL}/registry.json`);
 		const registry = JSON.parse(r.output);
-		expect(registry.version).toBe("0.1.0");
+		expect(registry.version).toBe("0.0.2");
 	});
 
 	it("should have installed skills for Claude", () => {
