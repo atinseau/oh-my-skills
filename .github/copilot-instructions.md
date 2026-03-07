@@ -36,6 +36,7 @@ TESTCONTAINERS_RYUK_DISABLED=true bun test tests/install.test.ts
 ## Key conventions
 
 - Skill ownership marker is required: every managed skill `SKILL.md` must include `by: oh-my-skills`; uninstall uses this marker to avoid deleting foreign skills.
+- Skills must be cross-LLM compatible (Claude Code + GitHub Copilot): use only standard SKILL.md frontmatter fields (`name`, `description`, `by`); avoid LLM-specific fields or syntax — in particular, never use Claude Code's `!`command`` dynamic injection syntax; instead, write explicit instructions telling the agent to run those commands itself.
 - `package.json` version is the release source of truth consumed by installer logic and tests.
 - Bash scripts prefer `jq` for JSON updates/parsing, with `grep`/`sed` fallback paths when `jq` is unavailable.
 - Shell config should contain only one `oh-my-skills` source line; reinstall is expected to be idempotent and not duplicate sourcing.
