@@ -1,0 +1,16 @@
+{
+  "name": "oh-my-skills",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "testcontainers": "^11.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
