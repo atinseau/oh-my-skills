@@ -1,17 +1,16 @@
 {
-	"permissions": {
-		"allow": [
-			"WebSearch",
-			"Bash(bun install:*)",
-			"Bash(bun test:*)",
-			"Bash(docker:*)",
-			"WebFetch(domain:testcontainers.com)",
-			"WebFetch(domain:node.testcontainers.org)",
-			"Bash(sed:*)",
-			"Bash(chmod +x:*)",
-			"Bash(bash:*)",
-			"Bash(TESTCONTAINERS_RYUK_DISABLED=true bun test:*)",
-			"Bash(bah non car la release 0.0.3 existe déjà)"
-		]
-	}
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(bun install:*)",
+      "Bash(bun test:*)",
+      "Bash(docker:*)",
+      "WebFetch(domain:testcontainers.com)",
+      "WebFetch(domain:node.testcontainers.org)",
+      "Bash(sed:*)",
+      "Bash(chmod +x:*)",
+      "Bash(bash:*)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true bun test:*)"
+    ]
+  }
 }
