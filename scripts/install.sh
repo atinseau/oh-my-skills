@@ -26,6 +26,13 @@ log_success() { echo -e "${GREEN}✓${NC} $1"; }
 log_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
 log_error()   { echo -e "${RED}✗${NC} $1" >&2; }
 
+require_git() {
+    if ! command -v git &> /dev/null; then
+        log_error "git is required to install oh-my-skills"
+        exit 1
+    fi
+}
+
 detect_shell() {
     if [[ -f "$HOME/.zshrc" ]]; then
         echo "zsh"
@@ -225,6 +232,7 @@ main() {
     local user_shell=$(detect_shell)
     log_info "Detected shell: $user_shell"
 
+    require_git
     detect_llms
     clone_repo
     init_registry
