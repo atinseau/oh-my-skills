@@ -61,9 +61,10 @@ describe("oh-my-skills Install (real script)", () => {
 			`printf '#!/bin/bash\\nalias deploy="echo deploying"\\n' > /tmp/remote-repo/src/commands/deploy.sh`,
 		);
 		exec(id, "mkdir -p /tmp/remote-repo/src/commands/oms-cli");
-		exec(
+		copyToContainer(
 			id,
-			`printf '#!/bin/bash\\noms() { echo updating; }\\n' > /tmp/remote-repo/src/commands/oms-cli/oms.sh`,
+			`${PROJECT_DIR}/src/commands/oms-cli/oms.sh`,
+			"/tmp/remote-repo/src/commands/oms-cli/oms.sh",
 		);
 
 		// Add scripts dir (so update can re-run install)
@@ -217,6 +218,14 @@ describe("oh-my-skills Install (real script)", () => {
 		expect(r.exitCode).toBe(0);
 		expect(r.output).toContain("greet");
 		expect(r.output).toContain("deploy");
+	});
+
+	it("should show help with oms --help", () => {
+		const r = exec(id, `bash -c 'source ${INSTALL}/shell && oms --help'`);
+		expect(r.exitCode).toBe(0);
+		expect(r.output).toContain("Usage: oms");
+		expect(r.output).toContain("update");
+		expect(r.output).toContain("--help");
 	});
 
 	it("should not create a skills subdirectory in .oh-my-skills", () => {

@@ -115,10 +115,10 @@ describe("oh-my-skills Update (real script)", () => {
 	});
 
 	it("should detect update when remote has new tag", () => {
-		// Push a new version to the remote repo
+		// Push a new version to the remote repo — also update hi.sh to verify command updates
 		exec(
 			id,
-			"cd /tmp/remote-repo && echo bye > src/commands/bye.sh && git add . && git commit -m 'feat(commands): add bye alias' && echo fix > CHANGELOG_FIX && git add . && git commit -m 'fix(update): improve release sync' && git tag v0.2.0",
+			"cd /tmp/remote-repo && echo bye > src/commands/bye.sh && git add . && git commit -m 'feat(commands): add bye alias' && printf '#!/bin/bash\\nalias hi=\"echo hi v2\"\\n' > src/commands/hi.sh && echo fix > CHANGELOG_FIX && git add . && git commit -m 'fix(update): improve release sync' && git tag v0.2.0",
 		);
 
 		const r = exec(
@@ -140,6 +140,17 @@ describe("oh-my-skills Update (real script)", () => {
 		expect(r.output).toContain("Changelog since");
 		expect(r.output).toContain("feat(commands): add bye alias");
 		expect(r.output).toContain("fix(update): improve release sync");
+	});
+
+	it("should have updated existing command after update", () => {
+		// hi.sh was modified in v0.2.0 — verify the installed copy reflects the new content
+		const r = exec(id, `cat ${INSTALL}/commands/hi.sh`);
+		expect(r.output).toContain("hi v2");
+	});
+
+	it("should have installed new command added in update", () => {
+		const r = exec(id, `test -f ${INSTALL}/commands/bye.sh && echo ok`);
+		expect(r.output).toBe("ok");
 	});
 
 	it("should handle not-installed state in manual mode", () => {

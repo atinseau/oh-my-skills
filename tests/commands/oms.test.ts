@@ -33,7 +33,21 @@ describe("oms command", () => {
 		);
 
 		expect(result.exitCode).toBe(0);
-		expect(result.output).toContain("Usage: oms update");
+		expect(result.output).toContain("Usage: oms");
+		expect(result.output).toContain("update");
+		expect(result.output).toContain("--help");
+	});
+
+	it("should print usage with --help", () => {
+		const result = exec(
+			id,
+			`bash -lc 'source /commands/oms-cli/oms.sh && oms --help'`,
+		);
+
+		expect(result.exitCode).toBe(0);
+		expect(result.output).toContain("Usage: oms");
+		expect(result.output).toContain("update");
+		expect(result.output).toContain("--help");
 	});
 
 	it("should delegate update to the installed update script in manual mode", () => {
