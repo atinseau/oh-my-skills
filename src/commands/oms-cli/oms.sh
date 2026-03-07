@@ -15,14 +15,21 @@ oms() {
             shift
             bash "$update_script" --manual "$@"
             ;;
-        help|"")
+        help|""|--help)
             cat <<'EOF'
-Usage: oms update
+Usage: oms <command>
+
+Commands:
+  update      Update oh-my-skills to the latest version
+  help        Show this help message
+
+Options:
+  --help      Show this help message
 EOF
             ;;
         *)
             echo "Unknown oms command: $command" >&2
-            echo "Usage: oms update" >&2
+            echo "Run 'oms --help' for usage." >&2
             return 1
             ;;
     esac
