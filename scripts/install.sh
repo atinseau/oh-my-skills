@@ -68,13 +68,9 @@ clone_repo() {
         branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "main")
         git pull origin "$branch" 2>/dev/null || log_warning "Could not update repository"
     else
-        if [[ -n "${TAG:-}" ]]; then
-            git clone --branch "$TAG" --depth 1 "$REPO_URL" "$INSTALL_DIR"
-            log_success "Repository cloned (tag $TAG) to $INSTALL_DIR"
-        else
-            git clone "$REPO_URL" "$INSTALL_DIR"
-            log_success "Repository cloned to $INSTALL_DIR"
-        fi
+        local tag="${TAG:-v$VERSION}"
+        git clone --branch "$tag" --depth 1 "$REPO_URL" "$INSTALL_DIR"
+        log_success "Repository cloned ($tag) to $INSTALL_DIR"
     fi
 }
 

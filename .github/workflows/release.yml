@@ -15,30 +15,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate install command
-        id: install_cmd
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          INSTALL_URL="https://raw.githubusercontent.com/${{ github.repository }}/${TAG}/scripts/install.sh"
-          INSTALL_CMD="curl -fsSL ${INSTALL_URL} | TAG=${TAG} bash"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "install_cmd=${INSTALL_CMD}" >> "$GITHUB_OUTPUT"
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.install_cmd.outputs.tag }}
-          name: ${{ steps.install_cmd.outputs.tag }}
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           body: |
             ## Install
 
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ steps.install_cmd.outputs.tag }}/scripts/install.sh | TAG=${{ steps.install_cmd.outputs.tag }} bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/scripts/install.sh | bash
             ```
 
             ## Uninstall
 
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ steps.install_cmd.outputs.tag }}/scripts/uninstall.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/scripts/uninstall.sh | bash
             ```
           generate_release_notes: true
