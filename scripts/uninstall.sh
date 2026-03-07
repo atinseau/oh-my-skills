@@ -4,9 +4,24 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "${BASH_SOURCE[0]%/*}" && pwd)"
-# shellcheck source=lib.sh
-source "$SCRIPT_DIR/lib.sh"
+DEFAULT_TAG="" # Set by release workflow in tagged installer commits; kept empty on master
+
+load_lib() {
+    if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]%/*}/lib.sh" ]]; then
+        # shellcheck source=lib.sh
+        source "${BASH_SOURCE[0]%/*}/lib.sh"
+        return
+    fi
+    # Running via curl | bash — download lib.sh from the same release tag
+    local _lib_tmp
+    _lib_tmp="$(mktemp)"
+    local _base_url="${OMS_LIB_BASE_URL:-https://raw.githubusercontent.com/atinseau/oh-my-skills/${DEFAULT_TAG}/scripts}"
+    curl -fsSL "${_base_url}/lib.sh" -o "$_lib_tmp"
+    # shellcheck disable=SC1090
+    source "$_lib_tmp"
+    rm -f "$_lib_tmp"
+}
+load_lib
 
 remove_skills() {
     if [[ ! -f "$REGISTRY_FILE" ]]; then
