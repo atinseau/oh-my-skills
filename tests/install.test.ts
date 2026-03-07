@@ -21,7 +21,7 @@ describe("oh-my-skills Install (real script)", () => {
 		id = container.getId();
 
 		// Install deps
-		exec(id, "apk add --no-cache git bash jq >/dev/null 2>&1");
+		exec(id, "apk add --no-cache git bash jq curl >/dev/null 2>&1");
 
 		// Copy real scripts into the container
 		exec(id, "mkdir -p /scripts");
@@ -119,6 +119,19 @@ describe("oh-my-skills Install (real script)", () => {
 		);
 		expect(r.exitCode).toBe(1);
 		expect(r.output).toContain("git is required");
+	});
+
+	it("should fetch lib.sh and install successfully when lib.sh is not beside the script", () => {
+		// Simulates curl pipe mode: only install.sh is available, no lib.sh beside it.
+		// OMS_LIB_BASE_URL uses file:// to mock the download without network access.
+		exec(id, "mkdir -p /tmp/standalone && cp /scripts/install.sh /tmp/standalone/install.sh");
+		const r = exec(
+			id,
+			"REPO_URL=/tmp/remote-repo OMS_LIB_BASE_URL=file:///scripts bash /tmp/standalone/install.sh 2>&1",
+		);
+		expect(r.output).not.toContain("unbound variable");
+		expect(r.exitCode).toBe(0);
+		expect(r.output).toContain("Installation Complete");
 	});
 
 	it("should have created ~/.oh-my-skills", () => {

@@ -4,6 +4,7 @@
 # Sourced by install.sh and update.sh
 
 # Configuration
+REPO_URL="${REPO_URL:-https://github.com/atinseau/oh-my-skills.git}"
 INSTALL_DIR="$HOME/.oh-my-skills"
 CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
 COPILOT_SKILLS_DIR="$HOME/.copilot/skills"
