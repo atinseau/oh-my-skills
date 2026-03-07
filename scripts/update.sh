@@ -7,6 +7,7 @@ set -euo pipefail
 # Configuration
 INSTALL_DIR="$HOME/.oh-my-skills"
 REPO_URL="${REPO_URL:-https://github.com/atinseau/oh-my-skills.git}"
+MODE="manual"
 
 # Colors
 RED='\033[0;31m'
@@ -19,6 +20,21 @@ log_info()    { echo -e "${BLUE}ℹ${NC} $1"; }
 log_success() { echo -e "${GREEN}✓${NC} $1"; }
 log_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
 log_error()   { echo -e "${RED}✗${NC} $1" >&2; }
+
+parse_args() {
+    case "${1:-}" in
+        ""|"--manual")
+            MODE="manual"
+            ;;
+        "--auto-check")
+            MODE="auto"
+            ;;
+        *)
+            log_error "Unknown option: ${1}"
+            exit 1
+            ;;
+    esac
+}
 
 confirm() {
     local prompt="$1"
@@ -50,12 +66,29 @@ get_remote_version() {
     echo "${raw#v}"
 }
 
+fetch_repo_metadata() {
+    cd "$INSTALL_DIR"
+
+    if [[ "$(git rev-parse --is-shallow-repository 2>/dev/null || echo false)" == "true" ]]; then
+        git fetch origin --tags --unshallow 2>/dev/null || git fetch origin --tags --depth=200 2>/dev/null
+    else
+        git fetch origin --tags 2>/dev/null
+    fi
+}
+
+get_commit_titles_since_release() {
+    local old_version="$1"
+    local new_version="$2"
+
+    cd "$INSTALL_DIR"
+    git log --pretty=format:'- %s' "v${old_version}..v${new_version}" 2>/dev/null || true
+}
+
 update_repo() {
     local new_version="$1"
     log_info "Updating oh-my-skills..."
 
     cd "$INSTALL_DIR"
-    git fetch origin --tags 2>/dev/null
     git checkout "v${new_version}" 2>/dev/null || git checkout "origin/master" 2>/dev/null
 
     log_success "Repository updated to $new_version"
@@ -68,48 +101,91 @@ reinstall() {
     fi
 }
 
+prompt_for_update() {
+    local local_version="$1"
+    local remote_version="$2"
+
+    echo ""
+    log_warning "Update available: $local_version → $remote_version"
+    log_info "Reason: keep your commands, skills, and fixes in sync with the latest release."
+    confirm "Update now to install the latest commands, skills, and fixes?"
+}
+
+print_changelog() {
+    local previous_version="$1"
+    local commit_titles="$2"
+
+    if [[ -z "$commit_titles" ]]; then
+        return 0
+    fi
+
+    echo ""
+    log_info "Changelog since v${previous_version}:"
+    printf '%s\n' "$commit_titles"
+}
+
 main() {
-    echo ""
-    log_info "=== oh-my-skills Auto-Updater ==="
-    echo ""
+    parse_args "${1:-}"
+
+    if [[ "$MODE" == "manual" ]]; then
+        echo ""
+        log_info "=== oh-my-skills Auto-Updater ==="
+        echo ""
+    fi
 
     if [[ ! -d "$INSTALL_DIR" ]]; then
-        log_warning "oh-my-skills is not installed"
+        if [[ "$MODE" == "manual" ]]; then
+            log_warning "oh-my-skills is not installed"
+        fi
         exit 0
     fi
 
-    log_info "Checking for updates..."
+    if [[ "$MODE" == "manual" ]]; then
+        log_info "Checking for updates..."
+    fi
 
     local local_version=$(get_local_version)
     local remote_version=$(get_remote_version)
 
-    log_info "Local:  $local_version"
-    log_info "Remote: $remote_version"
+    if [[ "$MODE" == "manual" ]]; then
+        log_info "Local:  $local_version"
+        log_info "Remote: $remote_version"
+    fi
 
     if [[ "$remote_version" == "unknown" ]]; then
-        log_warning "Could not fetch remote version"
-        exit 1
+        if [[ "$MODE" == "manual" ]]; then
+            log_warning "Could not fetch remote version"
+            exit 1
+        fi
+        exit 0
     fi
 
     if [[ "$local_version" != "$remote_version" ]]; then
-        echo ""
-        log_warning "Update available: $local_version → $remote_version"
-
-        if confirm "Do you want to update oh-my-skills?"; then
+        if prompt_for_update "$local_version" "$remote_version"; then
+            fetch_repo_metadata
+            local commit_titles
+            commit_titles=$(get_commit_titles_since_release "$local_version" "$remote_version")
             update_repo "$remote_version"
             reinstall
 
             echo ""
             log_success "=== Update Complete ==="
+            print_changelog "$local_version" "$commit_titles"
             log_info "Restart your terminal to apply changes"
         else
-            log_info "Update skipped"
+            if [[ "$MODE" == "auto" ]]; then
+                log_info "Update skipped. Run 'oms update' to update manually later."
+            else
+                log_info "Update skipped"
+            fi
         fi
-    else
+    elif [[ "$MODE" == "manual" ]]; then
         log_success "oh-my-skills is up to date"
     fi
 
-    echo ""
+    if [[ "$MODE" == "manual" ]]; then
+        echo ""
+    fi
 }
 
 main "$@"

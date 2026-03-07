@@ -81,17 +81,29 @@ describe("oh-my-skills Update (real script)", () => {
 		expect(r.output).toBe(VERSION);
 	});
 
-	it("should report up-to-date when no update available", () => {
-		const r = exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/update.sh`);
+	it("should report up-to-date in manual mode when no update available", () => {
+		const r = exec(
+			id,
+			`REPO_URL=/tmp/remote-repo bash /scripts/update.sh --manual`,
+		);
 		expect(r.exitCode).toBe(0);
 		expect(r.output).toContain("up to date");
+	});
+
+	it("should stay quiet in auto-check mode when no update available", () => {
+		const r = exec(
+			id,
+			`REPO_URL=/tmp/remote-repo bash /scripts/update.sh --auto-check`,
+		);
+		expect(r.exitCode).toBe(0);
+		expect(r.output).toBe("");
 	});
 
 	it("should not modify installation when up to date", () => {
 		// Add a marker file to verify nothing changes
 		exec(id, `echo untouched > ${INSTALL}/marker.txt`);
 
-		exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/update.sh`);
+		exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/update.sh --manual`);
 
 		const r = exec(id, `cat ${INSTALL}/marker.txt`);
 		expect(r.output).toBe("untouched");
@@ -106,35 +118,48 @@ describe("oh-my-skills Update (real script)", () => {
 		// Push a new version to the remote repo
 		exec(
 			id,
-			"cd /tmp/remote-repo && echo update > newfile && git add . && git commit -m 'v0.2.0' && git tag v0.2.0",
+			"cd /tmp/remote-repo && echo bye > src/commands/bye.sh && git add . && git commit -m 'feat(commands): add bye alias' && echo fix > CHANGELOG_FIX && git add . && git commit -m 'fix(update): improve release sync' && git tag v0.2.0",
 		);
 
-		// Now update should detect a difference
-		// Pipe "n" to decline the update (just check detection)
 		const r = exec(
 			id,
-			`echo n | REPO_URL=/tmp/remote-repo bash /scripts/update.sh`,
+			`echo n | REPO_URL=/tmp/remote-repo bash /scripts/update.sh --auto-check`,
 		);
 		expect(r.output).toContain("Update available");
-		expect(r.output).toContain("skipped");
+		expect(r.output).toContain("Reason: keep your commands, skills, and fixes");
+		expect(r.output).toContain("oms update");
 	});
 
-	it("should update when user confirms", () => {
-		// Pipe "y" to accept the update
+	it("should update in manual mode when user confirms", () => {
 		const r = exec(
 			id,
-			`echo y | REPO_URL=/tmp/remote-repo bash /scripts/update.sh`,
+			`echo y | REPO_URL=/tmp/remote-repo bash /scripts/update.sh --manual`,
 		);
 		expect(r.exitCode).toBe(0);
-		expect(r.output).toContain("Update");
+		expect(r.output).toContain("Update Complete");
+		expect(r.output).toContain("Changelog since");
+		expect(r.output).toContain("feat(commands): add bye alias");
+		expect(r.output).toContain("fix(update): improve release sync");
 	});
 
-	it("should handle not-installed state", () => {
+	it("should handle not-installed state in manual mode", () => {
 		// Remove installation
 		exec(id, `rm -rf ${INSTALL}`);
 
-		const r = exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/update.sh`);
+		const r = exec(
+			id,
+			`REPO_URL=/tmp/remote-repo bash /scripts/update.sh --manual`,
+		);
 		expect(r.exitCode).toBe(0);
 		expect(r.output).toContain("not installed");
+	});
+
+	it("should stay quiet when not installed in auto-check mode", () => {
+		const r = exec(
+			id,
+			`REPO_URL=/tmp/remote-repo bash /scripts/update.sh --auto-check`,
+		);
+		expect(r.exitCode).toBe(0);
+		expect(r.output).toBe("");
 	});
 });

@@ -21,12 +21,13 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           jq --arg v "$VERSION" '.version = $v' package.json > package.json.tmp && mv package.json.tmp package.json
+          sed -i "s|^DEFAULT_TAG=.*$|DEFAULT_TAG=\"${GITHUB_REF_NAME}\" # Set by release workflow in tagged installer commits; kept empty on master|" scripts/install.sh
 
       - name: Commit version bump
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json
+          git add package.json scripts/install.sh
           git diff --cached --quiet || git commit -m "chore: bump version to ${GITHUB_REF_NAME#v}"
           git push origin master
 
@@ -44,12 +45,13 @@ jobs:
             ## Install
 
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/scripts/install.sh | TAG=${{ github.ref_name }} bash
-            ```
-
-            ## Uninstall
-
-            ```bash
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/scripts/uninstall.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/scripts/install.sh | bash
             ```
           generate_release_notes: true
+
+      - name: Restore master installer to canary mode
+        run: |
+          sed -i 's|^DEFAULT_TAG=.*$|DEFAULT_TAG="" # Set by release workflow in tagged installer commits; kept empty on master|' scripts/install.sh
+          git add scripts/install.sh
+          git diff --cached --quiet || git commit -m "chore: restore canary installer mode"
+          git push origin master

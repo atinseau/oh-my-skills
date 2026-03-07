@@ -60,6 +60,11 @@ describe("oh-my-skills Install (real script)", () => {
 			id,
 			`printf '#!/bin/bash\\nalias deploy="echo deploying"\\n' > /tmp/remote-repo/src/commands/deploy.sh`,
 		);
+		exec(id, "mkdir -p /tmp/remote-repo/src/commands/oms-cli");
+		exec(
+			id,
+			`printf '#!/bin/bash\\noms() { echo updating; }\\n' > /tmp/remote-repo/src/commands/oms-cli/oms.sh`,
+		);
 
 		// Add scripts dir (so update can re-run install)
 		exec(id, "mkdir -p /tmp/remote-repo/scripts");
@@ -158,7 +163,7 @@ describe("oh-my-skills Install (real script)", () => {
 	it("should have copied commands", () => {
 		const r = exec(
 			id,
-			`test -f ${INSTALL}/commands/greet.sh && test -f ${INSTALL}/commands/deploy.sh && echo ok`,
+			`test -f ${INSTALL}/commands/greet.sh && test -f ${INSTALL}/commands/deploy.sh && test -f ${INSTALL}/commands/oms-cli/oms.sh && echo ok`,
 		);
 		expect(r.output).toBe("ok");
 	});
@@ -168,6 +173,8 @@ describe("oh-my-skills Install (real script)", () => {
 		expect(r.output).toBe("ok");
 
 		const content = exec(id, `cat ${INSTALL}/shell`);
+		expect(content.output).toContain("update.sh");
+		expect(content.output).toContain("--auto-check");
 		expect(content.output).toContain("source");
 		expect(content.output).toContain("commands");
 	});
@@ -196,7 +203,7 @@ describe("oh-my-skills Install (real script)", () => {
 	it("should source commands dynamically via shell script", () => {
 		const r = exec(
 			id,
-			`bash -c 'shopt -s expand_aliases; source ${INSTALL}/shell && alias greet && alias deploy'`,
+			`bash -c 'shopt -s expand_aliases; source ${INSTALL}/shell && alias greet && alias deploy && declare -f oms >/dev/null'`,
 		);
 		expect(r.exitCode).toBe(0);
 		expect(r.output).toContain("greet");
