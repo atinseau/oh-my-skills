@@ -10,7 +10,8 @@
 			"Bash(sed:*)",
 			"Bash(chmod +x:*)",
 			"Bash(bash:*)",
-			"Bash(TESTCONTAINERS_RYUK_DISABLED=true bun test:*)"
+			"Bash(TESTCONTAINERS_RYUK_DISABLED=true bun test:*)",
+			"Bash(bah non car la release 0.0.3 existe déjà)"
 		]
 	}
 }

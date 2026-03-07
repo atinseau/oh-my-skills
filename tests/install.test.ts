@@ -110,6 +110,15 @@ describe("oh-my-skills Install (real script)", () => {
 		expect(r.output).toContain("Installation Complete");
 	});
 
+	it("should fail fast when git is not installed", () => {
+		const r = exec(
+			id,
+			`PATH=/usr/local/bin /bin/bash /scripts/install.sh 2>&1`,
+		);
+		expect(r.exitCode).toBe(1);
+		expect(r.output).toContain("git is required");
+	});
+
 	it("should have created ~/.oh-my-skills", () => {
 		const r = exec(id, `test -d ${INSTALL} && echo ok`);
 		expect(r.output).toBe("ok");

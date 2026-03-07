@@ -44,3 +44,5 @@ TESTCONTAINERS_RYUK_DISABLED=true bun test tests/install.test.ts
 ## Guidelines
 
 - When a contribution is made, ensure copilot-instructions.md and claude.md are updated with any relevant information about new commands, architectural changes, or conventions, only updating the relevant sections and only if necessary.
+
+- If a critical behavior is added or changed, it should be reflected in the tests
