@@ -77,10 +77,10 @@ clone_repo() {
     else
         local target_tag="${TAG:-$DEFAULT_TAG}"
         if [[ -n "$target_tag" ]]; then
-            git clone --branch "$target_tag" --depth 1 "$REPO_URL" "$INSTALL_DIR"
+            git clone --branch "$target_tag" --depth 1 "$REPO_URL" "$INSTALL_DIR" 2>/dev/null || log_warning "Failed to clone tag '$target_tag', cloning default branch instead"
             log_success "Repository cloned ($target_tag) to $INSTALL_DIR"
         else
-            git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
+            git clone --depth 1 "$REPO_URL" "$INSTALL_DIR" 2>/dev/null || log_warning "Failed to clone repository"
             log_success "Repository cloned to $INSTALL_DIR"
         fi
     fi
