@@ -25,6 +25,7 @@ describe("oh-my-skills Install (real script)", () => {
 
 		// Copy real scripts into the container
 		exec(id, "mkdir -p /scripts");
+		copyToContainer(id, `${SCRIPTS_DIR}/lib.sh`, "/scripts/lib.sh");
 		copyToContainer(id, `${SCRIPTS_DIR}/install.sh`, "/scripts/install.sh");
 		copyToContainer(id, `${SCRIPTS_DIR}/uninstall.sh`, "/scripts/uninstall.sh");
 		copyToContainer(id, `${SCRIPTS_DIR}/update.sh`, "/scripts/update.sh");

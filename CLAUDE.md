@@ -19,7 +19,7 @@ bun check-types
 bun run check
 
 # Validate bash script syntax (all lifecycle scripts)
-bash -n scripts/install.sh && bash -n scripts/uninstall.sh && bash -n scripts/update.sh
+bash -n scripts/lib.sh && bash -n scripts/install.sh && bash -n scripts/uninstall.sh && bash -n scripts/update.sh
 
 # Run all tests (requires Docker running)
 TESTCONTAINERS_RYUK_DISABLED=true bun test
@@ -32,11 +32,10 @@ TESTCONTAINERS_RYUK_DISABLED=true bun test tests/install.test.ts
 
 ### Scripts (`scripts/`)
 
-Three bash scripts handle the lifecycle:
-
-- **`install.sh`** — Clones repo to `~/.oh-my-skills`, detects Claude/Copilot CLIs, copies skills to `~/.claude/skills/` and `~/.copilot/skills/`, copies commands to `~/.oh-my-skills/commands/`, creates `~/.oh-my-skills/shell` (dynamic sourcing + auto-update script), injects a single `source` line into `.bashrc`/`.zshrc`. Writes `registry.json` to track installed skill paths and version.
+- **`lib.sh`** — Shared library sourced by all three lifecycle scripts. Contains: colors/log helpers, `confirm()`, `detect_shell()`, `detect_llms()`, `get_version()`, `init_registry()`, `install_skills()`, `install_commands()`, `create_shell_sourcing(mode)`, `inject_sourcing(shell, mode)`. The `mode` parameter (`"install"` or `"update"`) controls log messages (e.g. "created" vs "updated") and suppresses redundant warnings in update context.
+- **`install.sh`** — Clones repo to `~/.oh-my-skills`, then calls lib functions to detect CLIs, copy skills/commands, create shell sourcing, and inject the `source` line into `.bashrc`/`.zshrc`. Writes `registry.json`.
 - **`uninstall.sh`** — Reads `registry.json` to find and remove skills (verified by `by: oh-my-skills` marker in SKILL.md), removes the sourcing line from shell config, deletes `~/.oh-my-skills/`.
-- **`update.sh`** — Supports manual mode and shell-startup auto-check mode, compares local version from `registry.json` with remote git tags, asks for explicit confirmation with a reason when an update is available, then re-runs install and prints commit titles since the previous release as the changelog.
+- **`update.sh`** — Supports manual mode and shell-startup auto-check mode, compares local version from `registry.json` with remote git tags, asks for explicit confirmation when an update is available, then calls lib functions directly (not `install.sh`) to update skills/commands/shell in update context, and prints commit titles since the previous release as the changelog.
 
 ### Registry (`~/.oh-my-skills/registry.json`)
 
