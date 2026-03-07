@@ -62,6 +62,7 @@ All tests run inside Alpine Docker containers via **testcontainers**. The real s
 ### Key conventions
 
 - Every skill MUST have `by: oh-my-skills` in its SKILL.md frontmatter — this is how uninstall identifies skills to remove
+- Skills MUST be cross-LLM compatible (Claude Code + GitHub Copilot): use only standard SKILL.md frontmatter fields (`name`, `description`, `by`); avoid Claude Code-specific fields (`disable-model-invocation`, `user-invocable`, `allowed-tools`, `context`) unless they have a functional equivalent; never use Claude Code-only syntax like `!`command`` for dynamic context injection — instead, write explicit instructions telling the agent to run those commands
 - `package.json` version is the release source of truth used by installer logic and tests
 - Scripts use `jq` when available, with `sed`/`grep` fallbacks for systems without it
 - Reinstall is expected to be idempotent and must not duplicate shell sourcing lines
