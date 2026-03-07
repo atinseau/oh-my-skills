@@ -51,15 +51,14 @@ get_remote_version() {
 }
 
 update_repo() {
+    local new_version="$1"
     log_info "Updating oh-my-skills..."
 
     cd "$INSTALL_DIR"
-    local branch
-    branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "main")
-    git fetch origin "$branch" 2>/dev/null
-    git reset --hard "origin/$branch" 2>/dev/null
+    git fetch origin --tags 2>/dev/null
+    git checkout "v${new_version}" 2>/dev/null || git checkout "origin/master" 2>/dev/null
 
-    log_success "Repository updated"
+    log_success "Repository updated to $new_version"
 }
 
 reinstall() {
@@ -97,7 +96,7 @@ main() {
         log_warning "Update available: $local_version → $remote_version"
 
         if confirm "Do you want to update oh-my-skills?"; then
-            update_repo
+            update_repo "$remote_version"
             reinstall
 
             echo ""
