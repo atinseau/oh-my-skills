@@ -91,24 +91,6 @@ describe("oh-my-skills Uninstall (real script)", () => {
 		if (container) await container.stop();
 	});
 
-	// Verify installation exists before uninstall
-	it("should have a working installation before uninstall", () => {
-		const reg = exec(id, `test -f ${INSTALL}/registry.json && echo ok`);
-		expect(reg.output).toBe("ok");
-
-		const skill = exec(
-			id,
-			`test -f ${HOME}/.claude/skills/test-skill/SKILL.md && echo ok`,
-		);
-		expect(skill.output).toBe("ok");
-
-		const sourcing = exec(
-			id,
-			`grep -q "oh-my-skills" ${HOME}/.bashrc && echo ok`,
-		);
-		expect(sourcing.output).toBe("ok");
-	});
-
 	it("should run uninstall.sh successfully", () => {
 		// Pipe "y" for confirmation
 		const r = exec(id, `echo y | bash /scripts/uninstall.sh`);

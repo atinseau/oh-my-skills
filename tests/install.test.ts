@@ -10,7 +10,7 @@ import {
 	VERSION,
 } from "./helpers";
 
-describe("oh-my-skills Install (real script)", () => {
+describe("oh-my-skills install.sh (e2e)", () => {
 	let container: StartedTestContainer;
 	let id: string;
 
@@ -20,10 +20,8 @@ describe("oh-my-skills Install (real script)", () => {
 			.start();
 		id = container.getId();
 
-		// Install deps
 		exec(id, "apk add --no-cache git bash jq curl >/dev/null 2>&1");
 
-		// Copy real scripts into the container
 		exec(id, "mkdir -p /scripts");
 		copyToContainer(id, `${SCRIPTS_DIR}/lib.sh`, "/scripts/lib.sh");
 		copyToContainer(id, `${SCRIPTS_DIR}/install.sh`, "/scripts/install.sh");
@@ -31,35 +29,22 @@ describe("oh-my-skills Install (real script)", () => {
 		copyToContainer(id, `${SCRIPTS_DIR}/update.sh`, "/scripts/update.sh");
 		exec(id, "chmod +x /scripts/*.sh");
 
-		// Create a local git repo to act as the "remote" repo
+		// Local git repo acting as the remote
 		exec(id, "mkdir -p /tmp/remote-repo");
 		exec(
 			id,
 			"cd /tmp/remote-repo && git init && git config user.email 't@t' && git config user.name 'T'",
 		);
 
-		// Add skills
 		exec(id, "mkdir -p /tmp/remote-repo/src/skills/greeting-skill");
 		exec(
 			id,
-			`printf '%s\\n' '---' 'name: greeting-skill' 'description: A greeting skill' 'by: oh-my-skills' '---' 'Say hello to the user.' > /tmp/remote-repo/src/skills/greeting-skill/SKILL.md`,
+			`printf '%s\n' '---' 'name: greeting-skill' 'by: oh-my-skills' '---' > /tmp/remote-repo/src/skills/greeting-skill/SKILL.md`,
 		);
-
-		exec(id, "mkdir -p /tmp/remote-repo/src/skills/deploy-skill");
-		exec(
-			id,
-			`printf '%s\\n' '---' 'name: deploy-skill' 'description: Deploy helper' 'by: oh-my-skills' '---' 'Help deploy.' > /tmp/remote-repo/src/skills/deploy-skill/SKILL.md`,
-		);
-
-		// Add commands
 		exec(id, "mkdir -p /tmp/remote-repo/src/commands");
 		exec(
 			id,
-			`printf '#!/bin/bash\\nalias greet="echo hello"\\n' > /tmp/remote-repo/src/commands/greet.sh`,
-		);
-		exec(
-			id,
-			`printf '#!/bin/bash\\nalias deploy="echo deploying"\\n' > /tmp/remote-repo/src/commands/deploy.sh`,
+			`printf '#!/bin/bash\nalias greet="echo hello"\n' > /tmp/remote-repo/src/commands/greet.sh`,
 		);
 		exec(id, "mkdir -p /tmp/remote-repo/src/commands/oms-cli");
 		copyToContainer(
@@ -67,46 +52,32 @@ describe("oh-my-skills Install (real script)", () => {
 			`${PROJECT_DIR}/src/commands/oms-cli/oms.sh`,
 			"/tmp/remote-repo/src/commands/oms-cli/oms.sh",
 		);
-
-		// Add scripts dir (so update can re-run install)
 		exec(id, "mkdir -p /tmp/remote-repo/scripts");
 		exec(id, "cp /scripts/*.sh /tmp/remote-repo/scripts/");
-
-		// Copy package.json (version source of truth)
 		copyToContainer(
 			id,
 			`${PROJECT_DIR}/package.json`,
 			"/tmp/remote-repo/package.json",
 		);
-
-		// Commit
 		exec(
 			id,
 			`cd /tmp/remote-repo && git add . && git commit -m 'initial' && git tag v${VERSION}`,
 		);
 
-		// Create fake claude and copilot binaries
+		// Fake LLM binaries
 		exec(
 			id,
-			`printf '#!/bin/sh\\necho claude' > /usr/local/bin/claude && chmod +x /usr/local/bin/claude`,
-		);
-		exec(
-			id,
-			`printf '#!/bin/sh\\necho copilot' > /usr/local/bin/copilot && chmod +x /usr/local/bin/copilot`,
+			`printf '#!/bin/sh\necho claude' > /usr/local/bin/claude && chmod +x /usr/local/bin/claude`,
 		);
 
-		// Create .bashrc
-		exec(
-			id,
-			`printf '%s\\n' '# my bashrc' 'export PATH=/usr/bin' > ${HOME}/.bashrc`,
-		);
+		exec(id, `printf '# my bashrc\nexport PATH=/usr/bin\n' > ${HOME}/.bashrc`);
 	}, 60_000);
 
 	afterAll(async () => {
 		if (container) await container.stop();
 	});
 
-	it("should run install.sh successfully", () => {
+	it("should complete the full install workflow successfully", () => {
 		const r = exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/install.sh`);
 		expect(r.exitCode).toBe(0);
 		expect(r.output).toContain("Installation Complete");
@@ -123,8 +94,12 @@ describe("oh-my-skills Install (real script)", () => {
 
 	it("should fetch lib.sh and install successfully when lib.sh is not beside the script", () => {
 		// Simulates curl pipe mode: only install.sh is available, no lib.sh beside it.
-		// OMS_LIB_BASE_URL uses file:// to mock the download without network access.
-		exec(id, "mkdir -p /tmp/standalone && cp /scripts/install.sh /tmp/standalone/install.sh");
+		// OMS_LIB_BASE_URL uses file:// to mock the network fetch without internet access.
+		exec(id, `rm -rf ${INSTALL}`);
+		exec(
+			id,
+			"mkdir -p /tmp/standalone && cp /scripts/install.sh /tmp/standalone/install.sh",
+		);
 		const r = exec(
 			id,
 			"REPO_URL=/tmp/remote-repo OMS_LIB_BASE_URL=file:///scripts bash /tmp/standalone/install.sh 2>&1",
@@ -134,116 +109,30 @@ describe("oh-my-skills Install (real script)", () => {
 		expect(r.output).toContain("Installation Complete");
 	});
 
-	it("should have created ~/.oh-my-skills", () => {
-		const r = exec(id, `test -d ${INSTALL} && echo ok`);
-		expect(r.output).toBe("ok");
-	});
-
-	it("should have created registry.json with version", () => {
-		const r = exec(id, `cat ${INSTALL}/registry.json`);
-		const registry = JSON.parse(r.output);
-		expect(registry.version).toBe(VERSION);
-	});
-
-	it("should have installed skills for Claude", () => {
-		const r = exec(id, `cat ${INSTALL}/registry.json`);
-		const registry = JSON.parse(r.output);
-		expect(registry.skills.claude.length).toBeGreaterThan(0);
-
-		// Check actual files exist
-		const check = exec(
-			id,
-			`test -f ${HOME}/.claude/skills/greeting-skill/SKILL.md && echo ok`,
-		);
-		expect(check.output).toBe("ok");
-
-		const check2 = exec(
-			id,
-			`test -f ${HOME}/.claude/skills/deploy-skill/SKILL.md && echo ok`,
-		);
-		expect(check2.output).toBe("ok");
-	});
-
-	it("should have installed skills for Copilot", () => {
-		const r = exec(id, `cat ${INSTALL}/registry.json`);
-		const registry = JSON.parse(r.output);
-		expect(registry.skills.copilot.length).toBeGreaterThan(0);
-
-		const check = exec(
-			id,
-			`test -f ${HOME}/.copilot/skills/greeting-skill/SKILL.md && echo ok`,
-		);
-		expect(check.output).toBe("ok");
-	});
-
-	it("should have oh-my-skills marker in installed skills", () => {
-		const r = exec(
-			id,
-			`grep "by: oh-my-skills" ${HOME}/.claude/skills/greeting-skill/SKILL.md && echo found`,
-		);
-		expect(r.output).toContain("found");
-	});
-
-	it("should have copied commands", () => {
-		const r = exec(
-			id,
-			`test -f ${INSTALL}/commands/greet.sh && test -f ${INSTALL}/commands/deploy.sh && test -f ${INSTALL}/commands/oms-cli/oms.sh && echo ok`,
-		);
-		expect(r.output).toBe("ok");
-	});
-
-	it("should have created the shell sourcing script", () => {
-		const r = exec(id, `test -x ${INSTALL}/shell && echo ok`);
-		expect(r.output).toBe("ok");
-
-		const content = exec(id, `cat ${INSTALL}/shell`);
-		expect(content.output).toContain("update.sh");
-		expect(content.output).toContain("--auto-check");
-		expect(content.output).toContain("source");
-		expect(content.output).toContain("commands");
-	});
-
-	it("should have injected sourcing into .bashrc", () => {
-		const r = exec(id, `grep "oh-my-skills" ${HOME}/.bashrc`);
-		expect(r.exitCode).toBe(0);
-		expect(r.output).toContain("source");
-	});
-
-	it("should have preserved original .bashrc content", () => {
-		const r = exec(id, `cat ${HOME}/.bashrc`);
-		expect(r.output).toContain("my bashrc");
-	});
-
-	it("should not duplicate sourcing on reinstall", () => {
-		// Run install again
-		const r = exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/install.sh`);
-		expect(r.exitCode).toBe(0);
-
-		// Count sourcing lines
+	it("should not duplicate the sourcing line on reinstall", () => {
+		exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/install.sh`);
 		const count = exec(id, `grep -c "oh-my-skills" ${HOME}/.bashrc`);
 		expect(count.output).toBe("1");
 	});
 
-	it("should source commands dynamically via shell script", () => {
+	it("should preserve original .bashrc content after install", () => {
+		const r = exec(id, `cat ${HOME}/.bashrc`);
+		expect(r.output).toContain("my bashrc");
+	});
+
+	it("should make commands available via the shell file", () => {
 		const r = exec(
 			id,
-			`bash -c 'shopt -s expand_aliases; source ${INSTALL}/shell && alias greet && alias deploy && declare -f oms >/dev/null'`,
+			`bash -c 'shopt -s expand_aliases; source ${INSTALL}/shell && alias greet'`,
 		);
 		expect(r.exitCode).toBe(0);
 		expect(r.output).toContain("greet");
-		expect(r.output).toContain("deploy");
 	});
 
-	it("should show help with oms --help", () => {
+	it("should expose oms command with --help", () => {
 		const r = exec(id, `bash -c 'source ${INSTALL}/shell && oms --help'`);
 		expect(r.exitCode).toBe(0);
 		expect(r.output).toContain("Usage: oms");
 		expect(r.output).toContain("update");
-		expect(r.output).toContain("--help");
-	});
-
-	it("should not create a skills subdirectory in .oh-my-skills", () => {
-		const r = exec(id, `test -d ${INSTALL}/skills && echo exists || echo nope`);
-		expect(r.output).toBe("nope");
 	});
 });

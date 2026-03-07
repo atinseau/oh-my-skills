@@ -65,10 +65,14 @@ detect_llms() {
 
 get_version() {
     local pkg="$INSTALL_DIR/package.json"
+    if [[ ! -f "$pkg" ]]; then
+        echo "unknown"
+        return
+    fi
     if command -v jq &> /dev/null; then
         jq -r '.version' "$pkg"
     else
-        grep -oP '"version"\s*:\s*"\K[^"]+' "$pkg" 2>/dev/null || echo "unknown"
+        sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$pkg" 2>/dev/null | head -1 || echo "unknown"
     fi
 }
 
