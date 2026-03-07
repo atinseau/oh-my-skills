@@ -3,6 +3,7 @@ pre-commit:
     - run: bun check-types
     - run: bun biome check --write {staged_files} --no-errors-on-unmatched --unsafe
       stage_fixed: true
+    - run: bash -n scripts/install.sh && bash -n scripts/uninstall.sh && bash -n scripts/update.sh
     - group:
         parallel: true
         jobs:
