@@ -6,7 +6,7 @@ set -euo pipefail
 
 # Configuration
 REPO_URL="${REPO_URL:-https://github.com/atinseau/oh-my-skills.git}"
-DEFAULT_TAG="" # Set by release workflow in tagged installer commits; kept empty on master
+DEFAULT_TAG="v0.0.6" # Set by release workflow in tagged installer commits; kept empty on master
 INSTALL_DIR="$HOME/.oh-my-skills"
 CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
 COPILOT_SKILLS_DIR="$HOME/.copilot/skills"
