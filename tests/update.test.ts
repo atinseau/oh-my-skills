@@ -1,6 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { GenericContainer, type StartedTestContainer } from "testcontainers";
-import { copyToContainer, exec, HOME, INSTALL, SCRIPTS_DIR } from "./helpers";
+import {
+	copyToContainer,
+	exec,
+	HOME,
+	INSTALL,
+	PROJECT_DIR,
+	SCRIPTS_DIR,
+	VERSION,
+} from "./helpers";
 
 describe("oh-my-skills Update (real script)", () => {
 	let container: StartedTestContainer;
@@ -21,7 +29,7 @@ describe("oh-my-skills Update (real script)", () => {
 		copyToContainer(id, `${SCRIPTS_DIR}/update.sh`, "/scripts/update.sh");
 		exec(id, "chmod +x /scripts/*.sh");
 
-		// Create local repo (v0.0.2)
+		// Create local repo (v${VERSION})
 		exec(id, "mkdir -p /tmp/remote-repo");
 		exec(
 			id,
@@ -41,9 +49,14 @@ describe("oh-my-skills Update (real script)", () => {
 			id,
 			"mkdir -p /tmp/remote-repo/scripts && cp /scripts/*.sh /tmp/remote-repo/scripts/",
 		);
+		copyToContainer(
+			id,
+			`${PROJECT_DIR}/package.json`,
+			"/tmp/remote-repo/package.json",
+		);
 		exec(
 			id,
-			"cd /tmp/remote-repo && git add . && git commit -m 'v0.0.2' && git tag v0.0.2",
+			`cd /tmp/remote-repo && git add . && git commit -m 'v${VERSION}' && git tag v${VERSION}`,
 		);
 
 		// Fake LLM binaries
@@ -63,15 +76,12 @@ describe("oh-my-skills Update (real script)", () => {
 		if (container) await container.stop();
 	});
 
-	it("should have version 0.0.2 after install", () => {
+	it(`should have version ${VERSION} after install`, () => {
 		const r = exec(id, `jq -r '.version' ${INSTALL}/registry.json`);
-		expect(r.output).toBe("0.0.2");
+		expect(r.output).toBe(VERSION);
 	});
 
 	it("should report up-to-date when no update available", () => {
-		// Remote repo still at v0.0.2, local registry says 0.0.2
-		// update.sh compares local version vs remote tags
-		// Since remote latest tag is v0.0.2 and local is 0.0.2, should be up to date
 		const r = exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/update.sh`);
 		expect(r.exitCode).toBe(0);
 		expect(r.output).toContain("up to date");
@@ -89,7 +99,7 @@ describe("oh-my-skills Update (real script)", () => {
 
 	it("should not modify registry when up to date", () => {
 		const r = exec(id, `jq -r '.version' ${INSTALL}/registry.json`);
-		expect(r.output).toBe("0.0.2");
+		expect(r.output).toBe(VERSION);
 	});
 
 	it("should detect update when remote has new tag", () => {

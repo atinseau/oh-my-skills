@@ -6,7 +6,6 @@ set -euo pipefail
 
 # Configuration
 REPO_URL="${REPO_URL:-https://github.com/atinseau/oh-my-skills.git}"
-VERSION="0.0.2"
 INSTALL_DIR="$HOME/.oh-my-skills"
 CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
 COPILOT_SKILLS_DIR="$HOME/.copilot/skills"
@@ -68,15 +67,30 @@ clone_repo() {
         branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "main")
         git pull origin "$branch" 2>/dev/null || log_warning "Could not update repository"
     else
-        local tag="${TAG:-v$VERSION}"
-        git clone --branch "$tag" --depth 1 "$REPO_URL" "$INSTALL_DIR"
-        log_success "Repository cloned ($tag) to $INSTALL_DIR"
+        if [[ -n "${TAG:-}" ]]; then
+            git clone --branch "$TAG" --depth 1 "$REPO_URL" "$INSTALL_DIR"
+            log_success "Repository cloned ($TAG) to $INSTALL_DIR"
+        else
+            git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
+            log_success "Repository cloned to $INSTALL_DIR"
+        fi
+    fi
+}
+
+get_version() {
+    local pkg="$INSTALL_DIR/package.json"
+    if command -v jq &> /dev/null; then
+        jq -r '.version' "$pkg"
+    else
+        grep -oP '"version"\s*:\s*"\K[^"]+' "$pkg" 2>/dev/null || echo "unknown"
     fi
 }
 
 init_registry() {
-    echo "{\"version\":\"$VERSION\",\"skills\":{\"claude\":[],\"copilot\":[]}}" > "$REGISTRY_FILE"
-    log_success "Registry initialized (v$VERSION)"
+    local version
+    version=$(get_version)
+    echo "{\"version\":\"$version\",\"skills\":{\"claude\":[],\"copilot\":[]}}" > "$REGISTRY_FILE"
+    log_success "Registry initialized (v$version)"
 }
 
 install_skills() {
@@ -92,7 +106,7 @@ install_skills() {
     if command -v jq &> /dev/null; then
         jq '.skills = {"claude":[],"copilot":[]}' "$REGISTRY_FILE" > "$tmp" && mv "$tmp" "$REGISTRY_FILE"
     else
-        echo "{\"version\":\"$VERSION\",\"skills\":{\"claude\":[],\"copilot\":[]}}" > "$REGISTRY_FILE"
+        echo "{\"version\":\"$(get_version)\",\"skills\":{\"claude\":[],\"copilot\":[]}}" > "$REGISTRY_FILE"
     fi
 
     for skill_dir in "$src_skills_dir"/*/; do

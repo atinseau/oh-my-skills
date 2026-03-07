@@ -1,6 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { GenericContainer, type StartedTestContainer } from "testcontainers";
-import { copyToContainer, exec, HOME, INSTALL, SCRIPTS_DIR } from "./helpers";
+import {
+	copyToContainer,
+	exec,
+	HOME,
+	INSTALL,
+	PROJECT_DIR,
+	SCRIPTS_DIR,
+	VERSION,
+} from "./helpers";
 
 describe("oh-my-skills Uninstall (real script)", () => {
 	let container: StartedTestContainer;
@@ -41,9 +49,14 @@ describe("oh-my-skills Uninstall (real script)", () => {
 			id,
 			"mkdir -p /tmp/remote-repo/scripts && cp /scripts/*.sh /tmp/remote-repo/scripts/",
 		);
+		copyToContainer(
+			id,
+			`${PROJECT_DIR}/package.json`,
+			"/tmp/remote-repo/package.json",
+		);
 		exec(
 			id,
-			"cd /tmp/remote-repo && git add . && git commit -m 'init' && git tag v0.0.2",
+			`cd /tmp/remote-repo && git add . && git commit -m 'init' && git tag v${VERSION}`,
 		);
 
 		// Fake LLM binaries

@@ -1,6 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { GenericContainer, type StartedTestContainer } from "testcontainers";
-import { copyToContainer, exec, HOME, INSTALL, SCRIPTS_DIR } from "./helpers";
+import {
+	copyToContainer,
+	exec,
+	HOME,
+	INSTALL,
+	PROJECT_DIR,
+	SCRIPTS_DIR,
+	VERSION,
+} from "./helpers";
 
 describe("oh-my-skills Install (real script)", () => {
 	let container: StartedTestContainer;
@@ -57,10 +65,17 @@ describe("oh-my-skills Install (real script)", () => {
 		exec(id, "mkdir -p /tmp/remote-repo/scripts");
 		exec(id, "cp /scripts/*.sh /tmp/remote-repo/scripts/");
 
+		// Copy package.json (version source of truth)
+		copyToContainer(
+			id,
+			`${PROJECT_DIR}/package.json`,
+			"/tmp/remote-repo/package.json",
+		);
+
 		// Commit
 		exec(
 			id,
-			"cd /tmp/remote-repo && git add . && git commit -m 'initial' && git tag v0.0.2",
+			`cd /tmp/remote-repo && git add . && git commit -m 'initial' && git tag v${VERSION}`,
 		);
 
 		// Create fake claude and copilot binaries
@@ -98,7 +113,7 @@ describe("oh-my-skills Install (real script)", () => {
 	it("should have created registry.json with version", () => {
 		const r = exec(id, `cat ${INSTALL}/registry.json`);
 		const registry = JSON.parse(r.output);
-		expect(registry.version).toBe("0.0.2");
+		expect(registry.version).toBe(VERSION);
 	});
 
 	it("should have installed skills for Claude", () => {

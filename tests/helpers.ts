@@ -35,3 +35,8 @@ export function copyToContainer(
 export const HOME = "/root";
 export const INSTALL = `${HOME}/.oh-my-skills`;
 export const SCRIPTS_DIR = path.resolve(import.meta.dir, "../scripts");
+export const PROJECT_DIR = path.resolve(import.meta.dir, "..");
+
+// Read version from package.json (single source of truth)
+const pkg = await Bun.file(path.join(PROJECT_DIR, "package.json")).json();
+export const VERSION: string = pkg.version;
