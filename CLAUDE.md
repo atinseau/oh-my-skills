@@ -34,7 +34,7 @@ TESTCONTAINERS_RYUK_DISABLED=true bun test tests/install.test.ts
 
 - **`lib.sh`** — Shared library sourced by all three lifecycle scripts. Contains: colors/log helpers, `confirm()`, `detect_shell()`, `detect_llms()`, `get_version()`, `init_registry()`, `extract_frontmatter()`, `generate_claude_wrapper()`, `generate_copilot_wrapper()`, `install_skills()`, `install_commands()`, `create_shell_sourcing(mode)`, `inject_sourcing(shell, mode)`. The `mode` parameter (`"install"` or `"update"`) controls log messages (e.g. "created" vs "updated") and suppresses redundant warnings in update context.
 - **`install.sh`** — Clones repo to `~/.oh-my-skills`, then calls lib functions to detect CLIs, install canonical skills + LLM wrappers, copy commands, create shell sourcing, and inject the `source` line into `.bashrc`/`.zshrc`. Writes `registry.json`.
-- **`uninstall.sh`** — Reads `registry.json` to find and remove LLM wrapper files (verified by checking that the wrapper references `oh-my-skills/skills/`), removes the sourcing line from shell config, deletes `~/.oh-my-skills/`.
+- **`uninstall.sh`** — Reads `registry.json` to find and remove LLM wrapper files (verified by checking that the wrapper references `oh-my-skills/skills/`), removes the sourcing line from shell config, deletes `~/.oh-my-skills/`. Accepts `--yes` / `-y` to skip the interactive confirmation prompt (required when running via `curl | bash` since stdin is not a terminal).
 - **`update.sh`** — Supports manual mode and shell-startup auto-check mode, compares local version from `registry.json` with remote git tags, asks for explicit confirmation when an update is available, then calls lib functions directly (not `install.sh`) to update skills/commands/shell in update context, and prints commit titles since the previous release as the changelog.
 
 ### Skill installation pattern (`.agent/skills` — Single Source, Multiple Consumers)
@@ -43,17 +43,17 @@ Skills follow a **single source of truth** pattern to avoid drift across LLM too
 
 1. **Canonical skill** — `~/.oh-my-skills/skills/<name>.md` contains 100% of the intelligence (copied from `src/skills/<name>/SKILL.md`). This is the only file that carries logic.
 2. **LLM wrappers** — Lightweight files (2–8 lines) that redirect to the canonical skill:
-   - **Claude**: `~/.claude/skills/<name>.md` — contains `Follow the instructions in <canonical-path>` + `$ARGUMENTS`
+   - **Claude**: `~/.claude/skills/<name>/SKILL.md` — contains `Follow the instructions in <canonical-path>` + `$ARGUMENTS`
    - **Copilot**: `~/.copilot/skills/<name>.prompt.md` — contains YAML frontmatter (`mode`, `description`) + a link to the canonical skill
 3. **Adding a new LLM** — Create a wrapper in the tool's native format pointing to the canonical skill. Zero logic duplication.
 
 ### Registry (`~/.oh-my-skills/registry.json`)
 
 ```json
-{"version":"0.1.0","skills":{"claude":["/root/.claude/skills/git-pr-flow.md"],"copilot":["/root/.copilot/skills/git-pr-flow.prompt.md"]}}
+{"version":"0.1.0","skills":{"claude":["/root/.claude/skills/git-pr-flow/SKILL.md"],"copilot":["/root/.copilot/skills/git-pr-flow.prompt.md"]}}
 ```
 
-The registry tracks the paths of **LLM wrapper files** (not directories). Uninstall uses the registry to locate wrappers and verifies ownership by checking that each wrapper references `oh-my-skills/skills/` before deleting it. Canonical skills live in `~/.oh-my-skills/skills/` and are cleaned up automatically when `~/.oh-my-skills/` is removed. Commands live in `~/.oh-my-skills/commands/` and are recursively sourced via `~/.oh-my-skills/shell`.
+The registry tracks the paths of **LLM wrapper files** (not directories). Uninstall uses the registry to locate wrappers and verifies ownership by checking that each wrapper references `oh-my-skills/skills/` before deleting it. For Claude wrappers (which live in subdirectories), the parent directory is also removed if empty after deletion. Canonical skills live in `~/.oh-my-skills/skills/` and are cleaned up automatically when `~/.oh-my-skills/` is removed. Commands live in `~/.oh-my-skills/commands/` and are recursively sourced via `~/.oh-my-skills/shell`.
 
 ### Source content (`src/`)
 

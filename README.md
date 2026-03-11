@@ -39,7 +39,7 @@ curl -fsSL https://raw.githubusercontent.com/atinseau/oh-my-skills/master/script
 ## Désinstallation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/atinseau/oh-my-skills/master/scripts/uninstall.sh | bash
+bash <(curl -fsSL https://raw.githubusercontent.com/atinseau/oh-my-skills/master/scripts/uninstall.sh) --yes
 ```
 
 ## Mise à jour manuelle

@@ -99,11 +99,14 @@ describe("oh-my-skills install.sh (e2e)", () => {
 	it("should generate Claude wrapper pointing to canonical skill", () => {
 		const r = exec(
 			id,
-			`test -f ${HOME}/.claude/skills/greeting-skill.md && echo ok`,
+			`test -f ${HOME}/.claude/skills/greeting-skill/SKILL.md && echo ok`,
 		);
 		expect(r.output).toBe("ok");
 
-		const content = exec(id, `cat ${HOME}/.claude/skills/greeting-skill.md`);
+		const content = exec(
+			id,
+			`cat ${HOME}/.claude/skills/greeting-skill/SKILL.md`,
+		);
 		expect(content.output).toContain("oh-my-skills/skills/greeting-skill.md");
 		expect(content.output).toContain("$ARGUMENTS");
 		// Wrapper should NOT contain the full skill content
