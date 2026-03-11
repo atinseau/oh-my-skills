@@ -39,7 +39,7 @@ describe("oh-my-skills Uninstall (real script)", () => {
 		exec(id, "mkdir -p /tmp/remote-repo/src/skills/test-skill");
 		exec(
 			id,
-			`printf '%s\\n' '---' 'name: test-skill' 'by: oh-my-skills' '---' 'Test.' > /tmp/remote-repo/src/skills/test-skill/SKILL.md`,
+			`printf '%s\\n' '---' 'name: test-skill' 'description: A test skill' 'by: oh-my-skills' '---' 'Test.' > /tmp/remote-repo/src/skills/test-skill/SKILL.md`,
 		);
 		exec(id, "mkdir -p /tmp/remote-repo/src/commands");
 		exec(
@@ -79,16 +79,39 @@ describe("oh-my-skills Uninstall (real script)", () => {
 		// Run install first
 		exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/install.sh`);
 
-		// Also create a foreign skill (not from oh-my-skills)
-		exec(id, `mkdir -p ${HOME}/.claude/skills/foreign-skill`);
+		// Also create a foreign skill in Claude's skills dir (not from oh-my-skills)
+		exec(id, `mkdir -p ${HOME}/.claude/skills`);
 		exec(
 			id,
-			`printf '%s\\n' '---' 'name: foreign' 'by: someone-else' '---' > ${HOME}/.claude/skills/foreign-skill/SKILL.md`,
+			`printf '%s\\n' 'This is a custom skill that has nothing to do with oh-my-skills.' > ${HOME}/.claude/skills/foreign-skill.md`,
 		);
 	}, 60_000);
 
 	afterAll(async () => {
 		if (container) await container.stop();
+	});
+
+	it("should have installed wrappers before uninstall", () => {
+		// Claude wrapper should be a file (not a directory)
+		const claude = exec(
+			id,
+			`test -f ${HOME}/.claude/skills/test-skill.md && echo ok`,
+		);
+		expect(claude.output).toBe("ok");
+
+		// Copilot wrapper should be a .prompt.md file
+		const copilot = exec(
+			id,
+			`test -f ${HOME}/.copilot/skills/test-skill.prompt.md && echo ok`,
+		);
+		expect(copilot.output).toBe("ok");
+
+		// Canonical skill should exist
+		const canonical = exec(
+			id,
+			`test -f ${INSTALL}/skills/test-skill.md && echo ok`,
+		);
+		expect(canonical.output).toBe("ok");
 	});
 
 	it("should run uninstall.sh successfully", () => {
@@ -98,26 +121,26 @@ describe("oh-my-skills Uninstall (real script)", () => {
 		expect(r.output).toContain("Uninstallation Complete");
 	});
 
-	it("should have removed skills with oh-my-skills marker from Claude", () => {
+	it("should have removed Claude wrapper for test-skill", () => {
 		const r = exec(
 			id,
-			`test -d ${HOME}/.claude/skills/test-skill && echo exists || echo gone`,
+			`test -f ${HOME}/.claude/skills/test-skill.md && echo exists || echo gone`,
 		);
 		expect(r.output).toBe("gone");
 	});
 
-	it("should have removed skills with oh-my-skills marker from Copilot", () => {
+	it("should have removed Copilot wrapper for test-skill", () => {
 		const r = exec(
 			id,
-			`test -d ${HOME}/.copilot/skills/test-skill && echo exists || echo gone`,
+			`test -f ${HOME}/.copilot/skills/test-skill.prompt.md && echo exists || echo gone`,
 		);
 		expect(r.output).toBe("gone");
 	});
 
-	it("should have preserved foreign skills (no marker)", () => {
+	it("should have preserved foreign skills (no oh-my-skills marker)", () => {
 		const r = exec(
 			id,
-			`test -f ${HOME}/.claude/skills/foreign-skill/SKILL.md && echo exists`,
+			`test -f ${HOME}/.claude/skills/foreign-skill.md && echo exists`,
 		);
 		expect(r.output).toBe("exists");
 	});

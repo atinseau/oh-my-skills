@@ -6,8 +6,7 @@
 # Configuration
 REPO_URL="${REPO_URL:-https://github.com/atinseau/oh-my-skills.git}"
 INSTALL_DIR="$HOME/.oh-my-skills"
-CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
-COPILOT_SKILLS_DIR="$HOME/.copilot/skills"
+SKILLS_DIR="$INSTALL_DIR/skills"
 REGISTRY_FILE="$INSTALL_DIR/registry.json"
 SHELL_FILE="$INSTALL_DIR/shell"
 COMMANDS_DIR="$INSTALL_DIR/commands"
@@ -83,6 +82,45 @@ init_registry() {
     log_success "Registry initialized (v$version)"
 }
 
+# Extract a YAML frontmatter field from a SKILL.md file
+# Usage: extract_frontmatter "field" "file"
+extract_frontmatter() {
+    local field="$1"
+    local file="$2"
+    sed -n "/^---$/,/^---$/{ s/^${field}:[[:space:]]*//p; }" "$file" | head -1
+}
+
+# Generate a Claude wrapper that points to the canonical skill
+generate_claude_wrapper() {
+    local skill_path="$1"
+    local dest="$2"
+
+    cat > "$dest" << WRAPPER
+Follow the instructions in ${skill_path}
+
+Additional user context: \$ARGUMENTS
+WRAPPER
+}
+
+# Generate a Copilot wrapper that points to the canonical skill
+generate_copilot_wrapper() {
+    local skill_path="$1"
+    local skill_name="$2"
+    local skill_description="$3"
+    local dest="$4"
+
+    cat > "$dest" << WRAPPER
+---
+mode: "agent"
+description: "${skill_description}"
+---
+
+Follow the instructions defined in [${skill_name} skill](${skill_path}).
+
+If the user provides additional context, incorporate it.
+WRAPPER
+}
+
 install_skills() {
     local src_skills_dir="$INSTALL_DIR/src/skills"
 
@@ -100,18 +138,33 @@ install_skills() {
         echo "{\"version\":\"$(get_version)\",\"skills\":{\"claude\":[],\"copilot\":[]}}" > "$REGISTRY_FILE"
     fi
 
+    # Ensure canonical skills directory exists
+    mkdir -p "$SKILLS_DIR"
+
     for skill_dir in "$src_skills_dir"/*/; do
         if [[ ! -d "$skill_dir" ]]; then continue; fi
+        if [[ ! -f "$skill_dir/SKILL.md" ]]; then continue; fi
 
         local skill_name
         skill_name=$(basename "$skill_dir")
 
-        # Install for Claude
+        # 1. Copy canonical skill to ~/.oh-my-skills/skills/<name>.md
+        local canonical_path="$SKILLS_DIR/$skill_name.md"
+        cp "$skill_dir/SKILL.md" "$canonical_path"
+        log_success "Installed canonical skill '$skill_name' → $canonical_path"
+
+        # Extract frontmatter for wrapper generation
+        local skill_description
+        skill_description=$(extract_frontmatter "description" "$canonical_path")
+
+        # 2. Generate LLM-specific wrappers
+        # Claude wrapper
         if command -v claude &> /dev/null; then
-            local claude_dest="$CLAUDE_SKILLS_DIR/$skill_name"
-            mkdir -p "$CLAUDE_SKILLS_DIR"
-            cp -r "$skill_dir" "$claude_dest"
-            log_success "Installed skill '$skill_name' for Claude → $claude_dest"
+            local claude_dir="$HOME/.claude/skills"
+            local claude_dest="$claude_dir/$skill_name.md"
+            mkdir -p "$claude_dir"
+            generate_claude_wrapper "$canonical_path" "$claude_dest"
+            log_success "Created Claude wrapper '$skill_name' → $claude_dest"
 
             local tmp
             tmp=$(mktemp)
@@ -124,12 +177,13 @@ install_skills() {
             fi
         fi
 
-        # Install for Copilot
+        # Copilot wrapper
         if command -v copilot &> /dev/null; then
-            local copilot_dest="$COPILOT_SKILLS_DIR/$skill_name"
-            mkdir -p "$COPILOT_SKILLS_DIR"
-            cp -r "$skill_dir" "$copilot_dest"
-            log_success "Installed skill '$skill_name' for Copilot → $copilot_dest"
+            local copilot_dir="$HOME/.copilot/skills"
+            local copilot_dest="$copilot_dir/$skill_name.prompt.md"
+            mkdir -p "$copilot_dir"
+            generate_copilot_wrapper "$canonical_path" "$skill_name" "$skill_description" "$copilot_dest"
+            log_success "Created Copilot wrapper '$skill_name' → $copilot_dest"
 
             local tmp
             tmp=$(mktemp)

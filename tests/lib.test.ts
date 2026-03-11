@@ -256,48 +256,84 @@ describe("lib.sh unit tests", () => {
 	// ─── install_skills() ─────────────────────────────────────────────────────
 
 	describe("install_skills()", () => {
-		it("copies skill to claude dir and updates registry", () => {
-			exec(id, `rm -rf ${HOME}/.claude/skills`);
+		it("copies canonical skill to ~/.oh-my-skills/skills/", () => {
+			exec(id, `rm -rf ${INSTALL}/skills`);
 			lib(id, `init_registry && install_skills`);
 
 			const skill = exec(
 				id,
-				`test -f ${HOME}/.claude/skills/hello-skill/SKILL.md && echo ok`,
+				`test -f ${INSTALL}/skills/hello-skill.md && echo ok`,
 			);
 			expect(skill.output).toBe("ok");
+
+			// Canonical file should contain the original SKILL.md content
+			const content = exec(id, `cat ${INSTALL}/skills/hello-skill.md`);
+			expect(content.output).toContain("by: oh-my-skills");
+		});
+
+		it("generates Claude wrapper and updates registry", () => {
+			exec(id, `rm -rf ${HOME}/.claude/skills`);
+			lib(id, `init_registry && install_skills`);
+
+			const wrapper = exec(
+				id,
+				`test -f ${HOME}/.claude/skills/hello-skill.md && echo ok`,
+			);
+			expect(wrapper.output).toBe("ok");
+
+			// Wrapper should point to canonical skill, not contain full content
+			const content = exec(id, `cat ${HOME}/.claude/skills/hello-skill.md`);
+			expect(content.output).toContain("oh-my-skills/skills/hello-skill.md");
+			expect(content.output).toContain("$ARGUMENTS");
 
 			const r = exec(id, `cat ${INSTALL}/registry.json`);
 			const registry = JSON.parse(r.output);
 			expect(registry.skills.claude.length).toBeGreaterThan(0);
 		});
 
-		it("copies skill to copilot dir and updates registry", () => {
+		it("generates Copilot wrapper and updates registry", () => {
 			exec(id, `rm -rf ${HOME}/.copilot/skills`);
 			lib(id, `init_registry && install_skills`);
 
-			const skill = exec(
+			const wrapper = exec(
 				id,
-				`test -f ${HOME}/.copilot/skills/hello-skill/SKILL.md && echo ok`,
+				`test -f ${HOME}/.copilot/skills/hello-skill.prompt.md && echo ok`,
 			);
-			expect(skill.output).toBe("ok");
+			expect(wrapper.output).toBe("ok");
+
+			// Wrapper should have frontmatter and point to canonical skill
+			const content = exec(
+				id,
+				`cat ${HOME}/.copilot/skills/hello-skill.prompt.md`,
+			);
+			expect(content.output).toContain('mode: "agent"');
+			expect(content.output).toContain("oh-my-skills/skills/hello-skill.md");
 
 			const r = exec(id, `cat ${INSTALL}/registry.json`);
 			const registry = JSON.parse(r.output);
 			expect(registry.skills.copilot.length).toBeGreaterThan(0);
 		});
 
-		it("skips claude install when claude CLI is absent", () => {
+		it("skips claude wrapper when claude CLI is absent", () => {
 			exec(
 				id,
 				`rm -rf ${HOME}/.claude/skills && mv /usr/local/bin/claude /usr/local/bin/claude.bak`,
 			);
 			lib(id, `init_registry && install_skills`);
 
-			const skill = exec(
+			const wrapper = exec(
 				id,
-				`test -d ${HOME}/.claude/skills/hello-skill && echo exists || echo absent`,
+				`test -f ${HOME}/.claude/skills/hello-skill.md && echo exists || echo absent`,
 			);
-			expect(skill.output).toBe("absent");
+			expect(wrapper.output).toBe("absent");
+
+			// Canonical skill should still be installed
+			const canonical = exec(
+				id,
+				`test -f ${INSTALL}/skills/hello-skill.md && echo ok`,
+			);
+			expect(canonical.output).toBe("ok");
+
 			exec(id, `mv /usr/local/bin/claude.bak /usr/local/bin/claude`);
 		});
 

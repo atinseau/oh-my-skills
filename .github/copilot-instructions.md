@@ -26,16 +26,17 @@ TESTCONTAINERS_RYUK_DISABLED=true bun test tests/install.test.ts
 
 - The project is driven by a shared library and three bash lifecycle scripts in `scripts/`:
   - `lib.sh`: shared library sourced by all three scripts. Contains log helpers, `confirm()`, `detect_shell()`, `detect_llms()`, registry/skills/commands/shell functions. `create_shell_sourcing` and `inject_sourcing` accept a `mode` parameter (`"install"` or `"update"`) to adapt their log output without duplicating logic.
-  - `install.sh`: clones/updates `~/.oh-my-skills`, then calls lib functions to install skills, commands, and shell sourcing in install context.
-  - `uninstall.sh`: reads `~/.oh-my-skills/registry.json`, removes only tracked skills that carry the expected marker, removes shell sourcing, and deletes `~/.oh-my-skills`.
+  - `install.sh`: clones/updates `~/.oh-my-skills`, then calls lib functions to install canonical skills + LLM wrappers, copy commands, create shell sourcing, and inject the `source` line into `.bashrc`/`.zshrc` in install context.
+  - `uninstall.sh`: reads `~/.oh-my-skills/registry.json`, removes only tracked LLM wrapper files that reference `oh-my-skills/skills/` (ownership marker), removes shell sourcing, and deletes `~/.oh-my-skills`.
   - `update.sh`: supports manual mode and shell-startup auto-check mode; compares installed version vs remote git tags, asks for explicit confirmation when an update is available, then calls lib functions directly in update context (not `install.sh`) and prints commit titles since the previous release as the changelog.
-- `registry.json` in the install directory is the runtime state: installed version and copied skill paths per CLI.
+- Skills follow a **single source of truth** pattern: canonical skills live in `~/.oh-my-skills/skills/<name>.md` (copied from `src/skills/<name>/SKILL.md`), and lightweight LLM-specific wrappers (2–8 lines) are generated in each tool's native location (`~/.claude/skills/<name>.md`, `~/.copilot/skills/<name>.prompt.md`). Wrappers contain zero logic — they only redirect to the canonical skill.
+- `registry.json` in the install directory is the runtime state: installed version and LLM wrapper file paths per CLI.
 - `~/.oh-my-skills/shell` is the integration point for commands: in interactive shells it runs the auto-update check, then recursively sources every `*.sh` file under `~/.oh-my-skills/commands`.
 - Tests (`tests/*.test.ts`) execute the real bash scripts inside Alpine containers using `testcontainers`; each suite builds a fake remote git repo and validates real filesystem effects.
 
 ## Key conventions
 
-- Skill ownership marker is required: every managed skill `SKILL.md` must include `by: oh-my-skills`; uninstall uses this marker to avoid deleting foreign skills.
+- Skill ownership marker is required: every managed skill `SKILL.md` must include `by: oh-my-skills`; uninstall identifies wrapper files by checking they reference `oh-my-skills/skills/` to avoid deleting foreign skills.
 - Skills must be cross-LLM compatible (Claude Code + GitHub Copilot): use only standard SKILL.md frontmatter fields (`name`, `description`, `by`); avoid LLM-specific fields or syntax — in particular, never use Claude Code's `!`command`` dynamic injection syntax; instead, write explicit instructions telling the agent to run those commands itself.
 - `package.json` version is the release source of truth consumed by installer logic and tests.
 - Bash scripts prefer `jq` for JSON updates/parsing, with `grep`/`sed` fallback paths when `jq` is unavailable.

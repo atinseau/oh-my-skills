@@ -39,7 +39,7 @@ describe("oh-my-skills install.sh (e2e)", () => {
 		exec(id, "mkdir -p /tmp/remote-repo/src/skills/greeting-skill");
 		exec(
 			id,
-			`printf '%s\n' '---' 'name: greeting-skill' 'by: oh-my-skills' '---' > /tmp/remote-repo/src/skills/greeting-skill/SKILL.md`,
+			`printf '%s\n' '---' 'name: greeting-skill' 'description: A friendly greeting skill' 'by: oh-my-skills' '---' 'Say hello nicely.' > /tmp/remote-repo/src/skills/greeting-skill/SKILL.md`,
 		);
 		exec(id, "mkdir -p /tmp/remote-repo/src/commands");
 		exec(
@@ -81,6 +81,33 @@ describe("oh-my-skills install.sh (e2e)", () => {
 		const r = exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/install.sh`);
 		expect(r.exitCode).toBe(0);
 		expect(r.output).toContain("Installation Complete");
+	});
+
+	it("should install canonical skill to ~/.oh-my-skills/skills/", () => {
+		const r = exec(
+			id,
+			`test -f ${INSTALL}/skills/greeting-skill.md && echo ok`,
+		);
+		expect(r.output).toBe("ok");
+
+		// Canonical file should contain the original SKILL.md content
+		const content = exec(id, `cat ${INSTALL}/skills/greeting-skill.md`);
+		expect(content.output).toContain("by: oh-my-skills");
+		expect(content.output).toContain("Say hello nicely.");
+	});
+
+	it("should generate Claude wrapper pointing to canonical skill", () => {
+		const r = exec(
+			id,
+			`test -f ${HOME}/.claude/skills/greeting-skill.md && echo ok`,
+		);
+		expect(r.output).toBe("ok");
+
+		const content = exec(id, `cat ${HOME}/.claude/skills/greeting-skill.md`);
+		expect(content.output).toContain("oh-my-skills/skills/greeting-skill.md");
+		expect(content.output).toContain("$ARGUMENTS");
+		// Wrapper should NOT contain the full skill content
+		expect(content.output).not.toContain("Say hello nicely.");
 	});
 
 	it("should fail fast when git is not installed", () => {

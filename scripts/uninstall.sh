@@ -31,32 +31,33 @@ remove_skills() {
 
     log_info "Removing installed skills..."
 
-    # Read registry and remove skills
+    # Wrappers are files (not directories) that reference ~/.oh-my-skills/skills/
+    # This reference serves as the ownership marker to avoid deleting foreign skills.
     if command -v jq &> /dev/null; then
         for path in $(jq -r '.skills.claude[]' "$REGISTRY_FILE" 2>/dev/null); do
-            if [[ -d "$path" ]]; then
-                if [[ -f "$path/SKILL.md" ]] && grep -q "by: oh-my-skills" "$path/SKILL.md" 2>/dev/null; then
-                    rm -rf "$path"
-                    log_success "Removed Claude skill: $(basename "$path")"
+            if [[ -f "$path" ]]; then
+                if grep -q "oh-my-skills/skills/" "$path" 2>/dev/null; then
+                    rm -f "$path"
+                    log_success "Removed Claude wrapper: $(basename "$path")"
                 fi
             fi
         done
 
         for path in $(jq -r '.skills.copilot[]' "$REGISTRY_FILE" 2>/dev/null); do
-            if [[ -d "$path" ]]; then
-                if [[ -f "$path/SKILL.md" ]] && grep -q "by: oh-my-skills" "$path/SKILL.md" 2>/dev/null; then
-                    rm -rf "$path"
-                    log_success "Removed Copilot skill: $(basename "$path")"
+            if [[ -f "$path" ]]; then
+                if grep -q "oh-my-skills/skills/" "$path" 2>/dev/null; then
+                    rm -f "$path"
+                    log_success "Removed Copilot wrapper: $(basename "$path")"
                 fi
             fi
         done
     else
         # Without jq: grep paths from JSON
-        grep -oP '"(/[^"]+)"' "$REGISTRY_FILE" 2>/dev/null | tr -d '"' | while read -r path; do
-            if [[ -d "$path" ]] && [[ -f "$path/SKILL.md" ]]; then
-                if grep -q "by: oh-my-skills" "$path/SKILL.md" 2>/dev/null; then
-                    rm -rf "$path"
-                    log_success "Removed skill: $(basename "$path")"
+        grep -oE '"(/[^"]+)"' "$REGISTRY_FILE" 2>/dev/null | tr -d '"' | while read -r path; do
+            if [[ -f "$path" ]]; then
+                if grep -q "oh-my-skills/skills/" "$path" 2>/dev/null; then
+                    rm -f "$path"
+                    log_success "Removed wrapper: $(basename "$path")"
                 fi
             fi
         done
