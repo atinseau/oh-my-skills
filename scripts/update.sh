@@ -86,7 +86,7 @@ update_repo() {
     cd "$INSTALL_DIR"
     git checkout "v${new_version}" 2>/dev/null || git checkout "origin/master" 2>/dev/null
 
-    log_success "Repository updated to $new_version"
+    log_success "Repository updated to ${CYAN}$new_version${NC}"
 }
 
 apply_update() {
@@ -106,7 +106,8 @@ prompt_for_update() {
     local remote_version="$2"
 
     echo ""
-    log_warning "Update available: $local_version → $remote_version"
+    echo -e "  ${YELLOW}⚡${NC} Update available: ${DIM}v${local_version}${NC} ${MAGENTA}→${NC} ${CYAN}${BOLD}v${remote_version}${NC}"
+    echo ""
     confirm "Update now to install the latest commands, skills, and fixes?"
 }
 
@@ -119,17 +120,19 @@ print_changelog() {
     fi
 
     echo ""
-    log_info "Changelog since v${previous_version}:"
-    printf '%s\n' "$commit_titles"
+    echo -e "  ${MAGENTA}${BOLD}Changelog since v${previous_version}:${NC}"
+    echo ""
+    while IFS= read -r line; do
+        echo -e "  ${CYAN}${line}${NC}"
+    done <<< "$commit_titles"
 }
 
 main() {
     parse_args "${1:-}"
 
     if [[ "$MODE" == "manual" ]]; then
-        echo ""
-        log_info "=== oh-my-skills Auto-Updater ==="
-        echo ""
+        print_banner
+        print_subtitle "Checking for updates..."
     fi
 
     if [[ ! -d "$INSTALL_DIR" ]]; then
@@ -140,6 +143,7 @@ main() {
     fi
 
     if [[ "$MODE" == "manual" ]]; then
+        echo ""
         log_info "Checking for updates..."
     fi
 
@@ -149,8 +153,8 @@ main() {
     remote_version=$(get_remote_version)
 
     if [[ "$MODE" == "manual" ]]; then
-        log_info "Local:  $local_version"
-        log_info "Remote: $remote_version"
+        log_info "Local:  ${BOLD}$local_version${NC}"
+        log_info "Remote: ${BOLD}$remote_version${NC}"
     fi
 
     if [[ "$remote_version" == "unknown" ]]; then
@@ -163,6 +167,7 @@ main() {
 
     if [[ "$local_version" != "$remote_version" ]]; then
         if prompt_for_update "$local_version" "$remote_version"; then
+            echo ""
             log_info "Updating oh-my-skills..."
             fetch_repo_metadata
             local commit_titles
@@ -170,23 +175,27 @@ main() {
             update_repo "$remote_version"
             apply_update
 
-            echo ""
-            log_success "=== Update Complete ==="
+            local user_shell
+            user_shell=$(detect_shell)
+
+            print_success_box "Update Complete! v${remote_version}" \
+                "" \
+                "Restart your terminal or run:" \
+                "source ~/.${user_shell}rc"
+
             print_changelog "$local_version" "$commit_titles"
-            log_info "Restart your terminal to apply changes"
+            echo ""
         else
             if [[ "$MODE" == "auto" ]]; then
-                log_info "Update skipped. Run 'oms update' to update manually later."
+                log_info "Update skipped. Run '${CYAN}oms update${NC}' to update manually later."
             else
                 log_info "Update skipped"
             fi
         fi
     elif [[ "$MODE" == "manual" ]]; then
-        log_success "oh-my-skills is up to date"
-    fi
-
-    if [[ "$MODE" == "manual" ]]; then
-        echo ""
+        print_info_box "Everything is up to date!" \
+            "" \
+            "v${local_version}"
     fi
 }
 

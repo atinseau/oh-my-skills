@@ -32,8 +32,6 @@ require_git() {
 }
 
 clone_repo() {
-    log_info "Installing oh-my-skills..."
-
     if [[ -d "$INSTALL_DIR/.git" ]]; then
         log_warning "Already installed. Updating..."
         cd "$INSTALL_DIR"
@@ -44,36 +42,52 @@ clone_repo() {
         local target_tag="${TAG:-$DEFAULT_TAG}"
         if [[ -n "$target_tag" ]]; then
             git clone --branch "$target_tag" --depth 1 "$REPO_URL" "$INSTALL_DIR" 2>/dev/null || log_warning "Failed to clone tag '$target_tag', cloning default branch instead"
-            log_success "Repository cloned ($target_tag) to $INSTALL_DIR"
+            log_success "Repository cloned (${CYAN}$target_tag${NC})"
         else
             git clone --depth 1 "$REPO_URL" "$INSTALL_DIR" 2>/dev/null || log_warning "Failed to clone repository"
-            log_success "Repository cloned to $INSTALL_DIR"
+            log_success "Repository cloned"
         fi
     fi
 }
 
 main() {
-    echo ""
-    log_info "=== oh-my-skills Installer ==="
-    echo ""
+    print_banner
+    print_subtitle "Installing..."
 
     local user_shell
     user_shell=$(detect_shell)
-    log_info "Detected shell: $user_shell"
 
+    init_steps 6
+
+    print_step "Detecting shell..."
+    log_info "Detected shell: ${CYAN}${BOLD}$user_shell${NC}"
+
+    print_step "Checking requirements..."
     require_git
+    log_success "git is available"
     detect_llms
+
+    print_step "Cloning repository..."
     clone_repo
+
+    print_step "Installing skills..."
     init_registry
     install_skills
+
+    print_step "Installing commands..."
     install_commands
+
+    print_step "Configuring shell..."
     create_shell_sourcing "install"
     inject_sourcing "$user_shell" "install"
 
-    echo ""
-    log_success "=== Installation Complete ==="
-    log_info "Restart your terminal or run: source ~/.${user_shell}rc"
-    echo ""
+    local version
+    version=$(get_version)
+
+    print_success_box "Installation Complete! v${version}" \
+        "" \
+        "Restart your terminal or run:" \
+        "source ~/.${user_shell}rc"
 }
 
 main "$@"

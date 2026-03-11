@@ -285,12 +285,15 @@ describe("lib.sh unit tests", () => {
 
 			const wrapper = exec(
 				id,
-				`test -f ${HOME}/.claude/skills/hello-skill.md && echo ok`,
+				`test -f ${HOME}/.claude/skills/hello-skill/SKILL.md && echo ok`,
 			);
 			expect(wrapper.output).toBe("ok");
 
 			// Wrapper should point to canonical skill, not contain full content
-			const content = exec(id, `cat ${HOME}/.claude/skills/hello-skill.md`);
+			const content = exec(
+				id,
+				`cat ${HOME}/.claude/skills/hello-skill/SKILL.md`,
+			);
 			expect(content.output).toContain("oh-my-skills/skills/hello-skill.md");
 			expect(content.output).toContain("$ARGUMENTS");
 
@@ -331,7 +334,7 @@ describe("lib.sh unit tests", () => {
 
 			const wrapper = exec(
 				id,
-				`test -f ${HOME}/.claude/skills/hello-skill.md && echo exists || echo absent`,
+				`test -f ${HOME}/.claude/skills/hello-skill/SKILL.md && echo exists || echo absent`,
 			);
 			expect(wrapper.output).toBe("absent");
 

@@ -95,7 +95,7 @@ describe("oh-my-skills Uninstall (real script)", () => {
 		// Claude wrapper should be a file (not a directory)
 		const claude = exec(
 			id,
-			`test -f ${HOME}/.claude/skills/test-skill.md && echo ok`,
+			`test -f ${HOME}/.claude/skills/test-skill/SKILL.md && echo ok`,
 		);
 		expect(claude.output).toBe("ok");
 
@@ -115,8 +115,7 @@ describe("oh-my-skills Uninstall (real script)", () => {
 	});
 
 	it("should run uninstall.sh successfully", () => {
-		// Pipe "y" for confirmation
-		const r = exec(id, `echo y | bash /scripts/uninstall.sh`);
+		const r = exec(id, `bash /scripts/uninstall.sh --yes`);
 		expect(r.exitCode).toBe(0);
 		expect(r.output).toContain("Uninstallation Complete");
 	});
@@ -124,7 +123,7 @@ describe("oh-my-skills Uninstall (real script)", () => {
 	it("should have removed Claude wrapper for test-skill", () => {
 		const r = exec(
 			id,
-			`test -f ${HOME}/.claude/skills/test-skill.md && echo exists || echo gone`,
+			`test -f ${HOME}/.claude/skills/test-skill/SKILL.md && echo exists || echo gone`,
 		);
 		expect(r.output).toBe("gone");
 	});

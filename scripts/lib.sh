@@ -11,22 +11,137 @@ REGISTRY_FILE="$INSTALL_DIR/registry.json"
 SHELL_FILE="$INSTALL_DIR/shell"
 COMMANDS_DIR="$INSTALL_DIR/commands"
 
-# Colors
+# ─── Colors — AI Neon palette ─────────────────────────────────────────────────
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+DIM='\033[2m'
 NC='\033[0m'
 
-log_info()    { echo -e "${BLUE}ℹ${NC} $1"; }
-log_success() { echo -e "${GREEN}✓${NC} $1"; }
-log_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
-log_error()   { echo -e "${RED}✗${NC} $1" >&2; }
+# ─── Log helpers ──────────────────────────────────────────────────────────────
+
+log_info()    { echo -e "  ${CYAN}ℹ${NC} $1"; }
+log_success() { echo -e "  ${GREEN}✓${NC} $1"; }
+log_warning() { echo -e "  ${YELLOW}⚠${NC} $1"; }
+log_error()   { echo -e "  ${RED}✗${NC} $1" >&2; }
+
+# ─── UI components ────────────────────────────────────────────────────────────
+
+# Step counter state
+_OMS_STEP_CURRENT=0
+_OMS_STEP_TOTAL=0
+
+# Initialize the step counter
+# Usage: init_steps <total>
+init_steps() {
+    _OMS_STEP_TOTAL="$1"
+    _OMS_STEP_CURRENT=0
+}
+
+# Print a numbered step header
+# Usage: print_step "Doing something..."
+print_step() {
+    _OMS_STEP_CURRENT=$(( _OMS_STEP_CURRENT + 1 ))
+    echo ""
+    echo -e "  ${MAGENTA}[${_OMS_STEP_CURRENT}/${_OMS_STEP_TOTAL}]${NC} ${BOLD}$1${NC}"
+}
+
+# Print the oh-my-skills banner
+# Usage: print_banner
+print_banner() {
+    echo ""
+    echo -e "  ${DIM}${MAGENTA}╭───────────────────────────────────────╮${NC}"
+    echo -e "  ${DIM}${MAGENTA}│${NC}                                       ${DIM}${MAGENTA}│${NC}"
+    echo -e "  ${DIM}${MAGENTA}│${NC}   ${CYAN}${BOLD}⚡ oh-my-skills${NC}                      ${DIM}${MAGENTA}│${NC}"
+    echo -e "  ${DIM}${MAGENTA}│${NC}   ${MAGENTA}AI-powered skills for your shell${NC}    ${DIM}${MAGENTA}│${NC}"
+    echo -e "  ${DIM}${MAGENTA}│${NC}                                       ${DIM}${MAGENTA}│${NC}"
+    echo -e "  ${DIM}${MAGENTA}╰───────────────────────────────────────╯${NC}"
+}
+
+# Print a subtitle under the banner
+# Usage: print_subtitle "Installing..."
+print_subtitle() {
+    echo -e "  ${DIM}$1${NC}"
+}
+
+# Print a success completion box
+# Usage: print_success_box "Installation Complete!" "v0.1.3" "Restart your terminal or run:" "source ~/.bashrc"
+print_success_box() {
+    local title="$1"
+    shift
+
+    echo ""
+    echo -e "  ${DIM}${GREEN}╭───────────────────────────────────────╮${NC}"
+    echo -e "  ${DIM}${GREEN}│${NC}                                       ${DIM}${GREEN}│${NC}"
+    echo -e "  ${DIM}${GREEN}│${NC}  ${GREEN}${BOLD}✓ ${title}${NC}$(printf '%*s' $(( 36 - ${#title} )) '')${DIM}${GREEN}│${NC}"
+
+    # Print additional lines
+    while [[ $# -gt 0 ]]; do
+        local line="$1"
+        shift
+        echo -e "  ${DIM}${GREEN}│${NC}  ${DIM}${line}${NC}$(printf '%*s' $(( 37 - ${#line} )) '')${DIM}${GREEN}│${NC}"
+    done
+
+    echo -e "  ${DIM}${GREEN}│${NC}                                       ${DIM}${GREEN}│${NC}"
+    echo -e "  ${DIM}${GREEN}╰───────────────────────────────────────╯${NC}"
+    echo ""
+}
+
+# Print an info completion box (cyan border)
+# Usage: print_info_box "Title" "line1" "line2"
+print_info_box() {
+    local title="$1"
+    shift
+
+    echo ""
+    echo -e "  ${DIM}${CYAN}╭───────────────────────────────────────╮${NC}"
+    echo -e "  ${DIM}${CYAN}│${NC}                                       ${DIM}${CYAN}│${NC}"
+    echo -e "  ${DIM}${CYAN}│${NC}  ${CYAN}${BOLD}${title}${NC}$(printf '%*s' $(( 37 - ${#title} )) '')${DIM}${CYAN}│${NC}"
+
+    while [[ $# -gt 0 ]]; do
+        local line="$1"
+        shift
+        echo -e "  ${DIM}${CYAN}│${NC}  ${DIM}${line}${NC}$(printf '%*s' $(( 37 - ${#line} )) '')${DIM}${CYAN}│${NC}"
+    done
+
+    echo -e "  ${DIM}${CYAN}│${NC}                                       ${DIM}${CYAN}│${NC}"
+    echo -e "  ${DIM}${CYAN}╰───────────────────────────────────────╯${NC}"
+    echo ""
+}
+
+# Print a goodbye box (magenta border)
+# Usage: print_goodbye_box "Title" "line1"
+print_goodbye_box() {
+    local title="$1"
+    shift
+
+    echo ""
+    echo -e "  ${DIM}${MAGENTA}╭───────────────────────────────────────╮${NC}"
+    echo -e "  ${DIM}${MAGENTA}│${NC}                                       ${DIM}${MAGENTA}│${NC}"
+    echo -e "  ${DIM}${MAGENTA}│${NC}  ${MAGENTA}${BOLD}${title}${NC}$(printf '%*s' $(( 37 - ${#title} )) '')${DIM}${MAGENTA}│${NC}"
+
+    while [[ $# -gt 0 ]]; do
+        local line="$1"
+        shift
+        echo -e "  ${DIM}${MAGENTA}│${NC}  ${DIM}${line}${NC}$(printf '%*s' $(( 37 - ${#line} )) '')${DIM}${MAGENTA}│${NC}"
+    done
+
+    echo -e "  ${DIM}${MAGENTA}│${NC}                                       ${DIM}${MAGENTA}│${NC}"
+    echo -e "  ${DIM}${MAGENTA}╰───────────────────────────────────────╯${NC}"
+    echo ""
+}
+
+# ─── Core helpers ─────────────────────────────────────────────────────────────
 
 confirm() {
     local prompt="$1"
     local response
-    read -p "$(echo -e "${YELLOW}?${NC}") $prompt (y/n) " response
+    read -p "$(echo -e "  ${MAGENTA}?${NC}") $prompt (y/n) " response
     [[ "$response" == "y" || "$response" == "Y" ]]
 }
 
@@ -151,7 +266,7 @@ install_skills() {
         # 1. Copy canonical skill to ~/.oh-my-skills/skills/<name>.md
         local canonical_path="$SKILLS_DIR/$skill_name.md"
         cp "$skill_dir/SKILL.md" "$canonical_path"
-        log_success "Installed canonical skill '$skill_name' → $canonical_path"
+        log_success "Installed canonical skill '${CYAN}$skill_name${NC}'"
 
         # Extract frontmatter for wrapper generation
         local skill_description
@@ -160,11 +275,11 @@ install_skills() {
         # 2. Generate LLM-specific wrappers
         # Claude wrapper
         if command -v claude &> /dev/null; then
-            local claude_dir="$HOME/.claude/skills"
-            local claude_dest="$claude_dir/$skill_name.md"
+            local claude_dir="$HOME/.claude/skills/$skill_name"
+            local claude_dest="$claude_dir/SKILL.md"
             mkdir -p "$claude_dir"
             generate_claude_wrapper "$canonical_path" "$claude_dest"
-            log_success "Created Claude wrapper '$skill_name' → $claude_dest"
+            log_success "Created Claude wrapper '${CYAN}$skill_name${NC}'"
 
             local tmp
             tmp=$(mktemp)
@@ -183,7 +298,7 @@ install_skills() {
             local copilot_dest="$copilot_dir/$skill_name.prompt.md"
             mkdir -p "$copilot_dir"
             generate_copilot_wrapper "$canonical_path" "$skill_name" "$skill_description" "$copilot_dest"
-            log_success "Created Copilot wrapper '$skill_name' → $copilot_dest"
+            log_success "Created Copilot wrapper '${CYAN}$skill_name${NC}'"
 
             local tmp
             tmp=$(mktemp)

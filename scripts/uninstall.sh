@@ -29,8 +29,6 @@ remove_skills() {
         return 0
     fi
 
-    log_info "Removing installed skills..."
-
     # Wrappers are files (not directories) that reference ~/.oh-my-skills/skills/
     # This reference serves as the ownership marker to avoid deleting foreign skills.
     if command -v jq &> /dev/null; then
@@ -38,7 +36,13 @@ remove_skills() {
             if [[ -f "$path" ]]; then
                 if grep -q "oh-my-skills/skills/" "$path" 2>/dev/null; then
                     rm -f "$path"
-                    log_success "Removed Claude wrapper: $(basename "$path")"
+                    # Remove parent skill directory if now empty (e.g. .claude/skills/<name>/)
+                    local parent_dir
+                    parent_dir="$(dirname "$path")"
+                    if [[ -d "$parent_dir" ]] && [[ -z "$(ls -A "$parent_dir")" ]]; then
+                        rmdir "$parent_dir"
+                    fi
+                    log_success "Removed Claude wrapper: $(basename "$(dirname "$path")")"
                 fi
             fi
         done
@@ -57,6 +61,12 @@ remove_skills() {
             if [[ -f "$path" ]]; then
                 if grep -q "oh-my-skills/skills/" "$path" 2>/dev/null; then
                     rm -f "$path"
+                    # Remove parent skill directory if now empty (Claude wrappers use subdirectories)
+                    local parent_dir
+                    parent_dir="$(dirname "$path")"
+                    if [[ -d "$parent_dir" ]] && [[ -z "$(ls -A "$parent_dir")" ]]; then
+                        rmdir "$parent_dir"
+                    fi
                     log_success "Removed wrapper: $(basename "$path")"
                 fi
             fi
@@ -98,31 +108,53 @@ remove_installation() {
 }
 
 main() {
-    echo ""
-    log_info "=== oh-my-skills Uninstaller ==="
-    echo ""
+    local skip_confirm=false
+    for arg in "$@"; do
+        case "$arg" in
+            --yes|-y) skip_confirm=true ;;
+        esac
+    done
+
+    print_banner
+    print_subtitle "Uninstalling..."
 
     if [[ ! -d "$INSTALL_DIR" ]]; then
+        echo ""
         log_warning "oh-my-skills is not installed"
+        echo ""
         exit 0
     fi
 
-    if ! confirm "Are you sure you want to uninstall oh-my-skills?"; then
-        log_info "Cancelled"
-        exit 0
+    if [[ "$skip_confirm" == false ]]; then
+        echo ""
+        if ! confirm "Are you sure you want to uninstall oh-my-skills?"; then
+            echo ""
+            log_info "Cancelled"
+            echo ""
+            exit 0
+        fi
     fi
 
     local user_shell
     user_shell=$(detect_shell)
 
+    init_steps 3
+
+    print_step "Removing skills..."
     remove_skills
+
+    print_step "Cleaning shell config..."
     remove_sourcing "$user_shell"
+
+    print_step "Removing installation..."
     remove_installation
 
-    echo ""
-    log_success "=== Uninstallation Complete ==="
-    log_info "Restart your terminal or run: source ~/.${user_shell}rc"
-    echo ""
+    print_goodbye_box "Uninstallation Complete!" \
+        "" \
+        "👋 See you next time!" \
+        "" \
+        "Restart your terminal or run:" \
+        "source ~/.${user_shell}rc"
 }
 
 main "$@"
