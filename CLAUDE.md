@@ -58,16 +58,21 @@ The registry tracks the paths of **LLM wrapper files** (not directories). Uninst
 ### Source content (`src/`)
 
 - `src/skills/` — Skill directories, each containing a `SKILL.md` with YAML frontmatter (`name`, `description`, `by: oh-my-skills`). At install time, the `SKILL.md` is copied as the canonical skill and LLM-specific wrappers are generated from its frontmatter.
-- `src/commands/` — Shell scripts (`.sh`) defining aliases/functions; nested command folders are supported (for example `src/commands/oms-cli/oms.sh`)
+- `src/commands/` — Shell scripts (`.sh`) defining aliases/functions. Two layouts are supported: flat (`commands/name.sh`) or nested (`commands/name/name.sh`). The nested layout allows co-locating tests and helper files alongside the command. Only `*.sh` files are copied to `~/.oh-my-skills/commands/` during installation; non-shell files (tests, READMEs, etc.) are excluded.
 
 ### Tests (`tests/`)
 
 All tests run inside Alpine Docker containers via **testcontainers**. The real scripts are copied into each container using `docker cp`, a local git repo simulates the remote, and fake `claude`/`copilot` binaries are created for LLM detection.
 
+Lifecycle script tests live in `tests/`:
 - `helpers.ts` — `exec()` wrapper (uses `docker exec` directly since testcontainers' `.exec()` hangs in bun), `copyToContainer()`, shared constants
 - `install.test.ts` — Runs real `install.sh` in container, verifies all artifacts
 - `uninstall.test.ts` — Installs first, then runs real `uninstall.sh`, checks cleanup + preservation of foreign skills
 - `update.test.ts` — Tests version comparison, no-op when up-to-date, update detection with new git tags
+
+Command tests are co-located with their source in `src/commands/<name>/<name>.test.ts`:
+- `src/commands/oms-cli/oms-cli.test.ts` — Tests the `oms` CLI command (help, update delegation, unknown subcommands)
+- `src/commands/oms-git-diff/oms-git-diff.test.ts` — Tests the `oms-git-diff` command with a multi-branch git topology (feature branches, integration branches, staged/unstaged changes, edge cases)
 
 ### Key conventions
 

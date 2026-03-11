@@ -32,7 +32,7 @@ TESTCONTAINERS_RYUK_DISABLED=true bun test tests/install.test.ts
 - Skills follow a **single source of truth** pattern: canonical skills live in `~/.oh-my-skills/skills/<name>.md` (copied from `src/skills/<name>/SKILL.md`), and lightweight LLM-specific wrappers (2–8 lines) are generated in each tool's native location (`~/.claude/skills/<name>.md`, `~/.copilot/skills/<name>.prompt.md`). Wrappers contain zero logic — they only redirect to the canonical skill.
 - `registry.json` in the install directory is the runtime state: installed version and LLM wrapper file paths per CLI.
 - `~/.oh-my-skills/shell` is the integration point for commands: in interactive shells it runs the auto-update check, then recursively sources every `*.sh` file under `~/.oh-my-skills/commands`.
-- Tests (`tests/*.test.ts`) execute the real bash scripts inside Alpine containers using `testcontainers`; each suite builds a fake remote git repo and validates real filesystem effects.
+- Tests execute the real bash scripts inside Alpine containers using `testcontainers`; each suite builds a fake remote git repo and validates real filesystem effects. Lifecycle script tests live in `tests/*.test.ts`; command tests are co-located with their source in `src/commands/<name>/<name>.test.ts`.
 
 ## Key conventions
 
@@ -41,7 +41,7 @@ TESTCONTAINERS_RYUK_DISABLED=true bun test tests/install.test.ts
 - `package.json` version is the release source of truth consumed by installer logic and tests.
 - Bash scripts prefer `jq` for JSON updates/parsing, with `grep`/`sed` fallback paths when `jq` is unavailable.
 - Shell config should contain only one `oh-my-skills` source line; reinstall is expected to be idempotent and not duplicate sourcing.
-- Commands may live in nested folders under `src/commands/`; installation copies the tree and shell bootstrap sources them recursively.
+- Commands support two layouts under `src/commands/`: flat (`command-name.sh`) or nested (`command-name/command-name.sh`). The nested layout allows co-locating tests and helper scripts alongside the command. Only `*.sh` files are copied to `~/.oh-my-skills/commands/` during installation; non-shell files (tests, READMEs, etc.) are excluded. The shell bootstrap sources all `*.sh` files recursively.
 
 
 ## Guidelines

@@ -45,7 +45,7 @@ describe("lib.sh unit tests", () => {
 			`printf '%s\n' '---' 'name: hello-skill' 'by: oh-my-skills' '---' > ${INSTALL}/src/skills/hello-skill/SKILL.md`,
 		);
 
-		// src/commands (with nested dir)
+		// src/commands (with nested dir + non-.sh files that should be excluded)
 		exec(id, `mkdir -p ${INSTALL}/src/commands/nested`);
 		exec(
 			id,
@@ -54,6 +54,14 @@ describe("lib.sh unit tests", () => {
 		exec(
 			id,
 			`printf '#!/bin/bash\nalias bye="echo bye"\n' > ${INSTALL}/src/commands/nested/bye.sh`,
+		);
+		exec(
+			id,
+			`printf 'import { test } from "bun:test";\n' > ${INSTALL}/src/commands/nested/bye.test.ts`,
+		);
+		exec(
+			id,
+			`printf '# Commands README\n' > ${INSTALL}/src/commands/README.md`,
 		);
 
 		// Fake LLM binaries
@@ -372,6 +380,23 @@ describe("lib.sh unit tests", () => {
 			lib(id, `install_commands`);
 			const r = exec(id, `test -x ${INSTALL}/commands/hi.sh && echo ok`);
 			expect(r.output).toBe("ok");
+		});
+
+		it("excludes non-.sh files from installation", () => {
+			exec(id, `rm -rf ${INSTALL}/commands`);
+			lib(id, `install_commands`);
+
+			const ts = exec(
+				id,
+				`test -f ${INSTALL}/commands/nested/bye.test.ts && echo found || echo absent`,
+			);
+			expect(ts.output).toBe("absent");
+
+			const md = exec(
+				id,
+				`test -f ${INSTALL}/commands/README.md && echo found || echo absent`,
+			);
+			expect(md.output).toBe("absent");
 		});
 	});
 

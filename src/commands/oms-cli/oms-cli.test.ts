@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { GenericContainer, type StartedTestContainer } from "testcontainers";
-import { copyToContainer, exec, HOME, PROJECT_DIR } from "../helpers";
+import {
+	copyToContainer,
+	exec,
+	HOME,
+	PROJECT_DIR,
+} from "../../../tests/helpers";
 
 describe("oms command", () => {
 	let container: StartedTestContainer;
