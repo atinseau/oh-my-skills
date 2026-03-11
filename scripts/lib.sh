@@ -207,8 +207,17 @@ install_commands() {
     fi
 
     mkdir -p "$COMMANDS_DIR"
-    cp -R "$src_commands_dir"/. "$COMMANDS_DIR"/
-    find "$COMMANDS_DIR" -type f -name "*.sh" -exec chmod +x {} +
+
+    # Copy only .sh files, preserving directory structure.
+    # Supports both flat (commands/name.sh) and nested (commands/name/file.sh) layouts.
+    while IFS= read -r -d '' sh_file; do
+        local rel_path="${sh_file#"$src_commands_dir"/}"
+        local dest="$COMMANDS_DIR/$rel_path"
+        mkdir -p "$(dirname "$dest")"
+        cp "$sh_file" "$dest"
+        chmod +x "$dest"
+    done < <(find "$src_commands_dir" -type f -name "*.sh" -print0)
+
     log_success "Commands copied to $COMMANDS_DIR"
 }
 
