@@ -6,6 +6,10 @@ set -euo pipefail
 
 DEFAULT_TAG="" # Set by release workflow in tagged installer commits; kept empty on master
 
+# Cache configuration
+UPDATE_CACHE_FILE="${HOME}/.oh-my-skills/.update-cache"
+UPDATE_CACHE_TTL="${OMS_UPDATE_CACHE_TTL:-86400}" # 24 hours in seconds
+
 load_lib() {
     if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]%/*}/lib.sh" ]]; then
         # shellcheck source=lib.sh
@@ -31,6 +35,9 @@ parse_args() {
             ;;
         "--auto-check")
             MODE="auto"
+            ;;
+        "--background-fetch")
+            MODE="background"
             ;;
         *)
             log_error "Unknown option: ${1}"
@@ -61,6 +68,71 @@ get_remote_version() {
     # Strip leading v for consistent comparison
     echo "${raw#v}"
 }
+
+# ─── Cache helpers ────────────────────────────────────────────────────────────
+
+# Write remote version and current timestamp to cache file
+# Format: <timestamp> <remote_version>
+write_cache() {
+    local remote_version="$1"
+    local now
+    now=$(date +%s)
+    echo "${now} ${remote_version}" > "$UPDATE_CACHE_FILE"
+}
+
+# Read cache and output: <timestamp> <remote_version>
+# Returns 1 if cache does not exist or is malformed
+read_cache() {
+    if [[ ! -f "$UPDATE_CACHE_FILE" ]]; then
+        return 1
+    fi
+    local content
+    content=$(cat "$UPDATE_CACHE_FILE" 2>/dev/null) || return 1
+    local ts version
+    ts=$(echo "$content" | awk '{print $1}')
+    version=$(echo "$content" | awk '{print $2}')
+    if [[ -z "$ts" || -z "$version" ]]; then
+        return 1
+    fi
+    echo "$ts $version"
+}
+
+# Check if the cache is still fresh (within TTL)
+is_cache_fresh() {
+    local cache_data
+    cache_data=$(read_cache) || return 1
+    local ts
+    ts=$(echo "$cache_data" | awk '{print $1}')
+    local now
+    now=$(date +%s)
+    local age=$(( now - ts ))
+    [[ $age -lt $UPDATE_CACHE_TTL ]]
+}
+
+# Get cached remote version (empty string if no cache)
+get_cached_remote_version() {
+    local cache_data
+    cache_data=$(read_cache) || { echo ""; return; }
+    echo "$cache_data" | awk '{print $2}'
+}
+
+# Invalidate the cache (force re-fetch on next shell open)
+invalidate_cache() {
+    rm -f "$UPDATE_CACHE_FILE"
+}
+
+# Spawn a background process that fetches remote version and writes to cache.
+# Detached from the shell so it won't block startup.
+spawn_background_fetch() {
+    # Re-invoke ourselves with --background-fetch in a detached subshell
+    # Redirect all output to /dev/null so nothing leaks into the user's terminal
+    (
+        REPO_URL="${REPO_URL}" bash "${BASH_SOURCE[0]}" --background-fetch \
+            </dev/null >/dev/null 2>&1 &
+    )
+}
+
+# ─── Repo / update helpers ───────────────────────────────────────────────────
 
 fetch_repo_metadata() {
     cd "$INSTALL_DIR"
@@ -127,75 +199,120 @@ print_changelog() {
     done <<< "$commit_titles"
 }
 
+perform_update() {
+    local local_version="$1"
+    local remote_version="$2"
+
+    echo ""
+    log_info "Updating oh-my-skills..."
+    fetch_repo_metadata
+    local commit_titles
+    commit_titles=$(get_commit_titles_since_release "$local_version" "$remote_version")
+    update_repo "$remote_version"
+    apply_update
+
+    # Invalidate cache after a successful update so next auto-check re-fetches cleanly
+    invalidate_cache
+
+    local user_shell
+    user_shell=$(detect_shell)
+
+    print_success_box "Update Complete! v${remote_version}" \
+        "" \
+        "Restart your terminal or run:" \
+        "source ~/.${user_shell}rc"
+
+    print_changelog "$local_version" "$commit_titles"
+    echo ""
+}
+
+# ─── Main logic ───────────────────────────────────────────────────────────────
+
 main() {
     parse_args "${1:-}"
 
-    if [[ "$MODE" == "manual" ]]; then
-        print_banner
-        print_subtitle "Checking for updates..."
-    fi
-
-    if [[ ! -d "$INSTALL_DIR" ]]; then
-        if [[ "$MODE" == "manual" ]]; then
-            log_warning "oh-my-skills is not installed"
+    # ── Background fetch mode: silent, only writes cache, then exits ──
+    if [[ "$MODE" == "background" ]]; then
+        if [[ ! -d "$INSTALL_DIR" ]]; then
+            exit 0
+        fi
+        local remote_version
+        remote_version=$(get_remote_version)
+        if [[ -n "$remote_version" && "$remote_version" != "unknown" ]]; then
+            write_cache "$remote_version"
         fi
         exit 0
     fi
 
+    # ── Manual mode: synchronous check with full UI ──
     if [[ "$MODE" == "manual" ]]; then
+        print_banner
+        print_subtitle "Checking for updates..."
+
+        if [[ ! -d "$INSTALL_DIR" ]]; then
+            log_warning "oh-my-skills is not installed"
+            exit 0
+        fi
+
         echo ""
         log_info "Checking for updates..."
+
+        local local_version
+        local_version=$(get_local_version)
+        local remote_version
+        remote_version=$(get_remote_version)
+
+        log_info "Local:  ${BOLD}$local_version${NC}"
+        log_info "Remote: ${BOLD}$remote_version${NC}"
+
+        if [[ "$remote_version" == "unknown" ]]; then
+            log_warning "Could not fetch remote version"
+            exit 1
+        fi
+
+        # Update cache with the fresh result
+        write_cache "$remote_version"
+
+        if [[ "$local_version" != "$remote_version" ]]; then
+            if prompt_for_update "$local_version" "$remote_version"; then
+                perform_update "$local_version" "$remote_version"
+            else
+                log_info "Update skipped"
+            fi
+        else
+            print_info_box "Everything is up to date!" \
+                "" \
+                "v${local_version}"
+        fi
+        return
+    fi
+
+    # ── Auto-check mode: cache-first, zero-latency ──
+    if [[ ! -d "$INSTALL_DIR" ]]; then
+        exit 0
     fi
 
     local local_version
     local_version=$(get_local_version)
-    local remote_version
-    remote_version=$(get_remote_version)
 
-    if [[ "$MODE" == "manual" ]]; then
-        log_info "Local:  ${BOLD}$local_version${NC}"
-        log_info "Remote: ${BOLD}$remote_version${NC}"
-    fi
+    # If cache is fresh, use cached value (no network call)
+    if is_cache_fresh; then
+        local cached_version
+        cached_version=$(get_cached_remote_version)
 
-    if [[ "$remote_version" == "unknown" ]]; then
-        if [[ "$MODE" == "manual" ]]; then
-            log_warning "Could not fetch remote version"
-            exit 1
-        fi
-        exit 0
-    fi
-
-    if [[ "$local_version" != "$remote_version" ]]; then
-        if prompt_for_update "$local_version" "$remote_version"; then
-            echo ""
-            log_info "Updating oh-my-skills..."
-            fetch_repo_metadata
-            local commit_titles
-            commit_titles=$(get_commit_titles_since_release "$local_version" "$remote_version")
-            update_repo "$remote_version"
-            apply_update
-
-            local user_shell
-            user_shell=$(detect_shell)
-
-            print_success_box "Update Complete! v${remote_version}" \
-                "" \
-                "Restart your terminal or run:" \
-                "source ~/.${user_shell}rc"
-
-            print_changelog "$local_version" "$commit_titles"
-            echo ""
-        else
-            if [[ "$MODE" == "auto" ]]; then
-                log_info "Update skipped. Run '${CYAN}oms update${NC}' to update manually later."
+        if [[ -n "$cached_version" && "$cached_version" != "unknown" && "$local_version" != "$cached_version" ]]; then
+            # Update available — prompt the user
+            if prompt_for_update "$local_version" "$cached_version"; then
+                perform_update "$local_version" "$cached_version"
             else
-                log_info "Update skipped"
+                log_info "Update skipped. Run '${CYAN}oms update${NC}' to update manually later."
             fi
         fi
-    elif [[ "$MODE" == "manual" ]]; then
-        print_info_box "Everything is up to date!" \
-            "" \
-            "v${local_version}"
+        # Cache is fresh and up-to-date (or unknown) — nothing to do
+    else
+        # Cache is stale or missing — spawn a background fetch and move on
+        # The user will see the notification on the *next* shell open
+        spawn_background_fetch
     fi
 }
 

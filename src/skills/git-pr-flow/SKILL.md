@@ -1,33 +1,43 @@
 ---
 name: git-pr-flow
-description: Automate branch creation, commit, and pull request opening based on git diff context. Use when you want to commit work and open a pull request.
+description: Automate branch creation, commit, and pull request opening by delegating diff analysis to git-pr-describe. Use when you want to commit work and open a pull request.
 by: oh-my-skills
+---
+
+## Prerequisites
+
+Before anything else, verify these requirements. If any check fails, stop and tell the user what is missing.
+
+1. **Inside a git repository:** `git rev-parse --is-inside-work-tree`
+2. **GitHub CLI installed and authenticated:** `gh auth status`
+3. **Remote `origin` exists:** `git remote get-url origin`
+
 ---
 
 ## Workflow
 
-Before starting, collect the current git context by running these commands:
-- `git branch --show-current` — current branch
-- `git status --short` — working tree status
-- `git remote show origin 2>/dev/null | grep 'HEAD branch' | awk '{print $NF}'` — default remote branch (fallback: `main`)
+Collect the current git context:
+- `git branch --show-current` → `CURRENT_BRANCH`
+- `git status --short` → working tree status
 
-If `git status --short` returns nothing (clean working tree), stop immediately and tell the user: "Nothing to commit — your working tree is clean."
+If `git status --short` returns nothing (clean working tree) and there are no unpushed commits, stop immediately and tell the user: "Nothing to commit — your working tree is clean."
 
 Execute all steps automatically without asking for confirmation, except where explicitly noted.
 
 ---
 
-### Step 1 — Identify the destination branch
+### Step 1 — Ask for the destination branch
 
-Use the remote HEAD branch detected above as `DESTINATION_BRANCH` (typically `main`, `master`, or `develop`). Do not ask the user.
+**Always ask the user:** "What is the destination branch for this PR?"
+
+Store the answer as `DESTINATION_BRANCH`.
 
 ---
 
 ### Step 2 — Check for an existing open PR
 
-Now that `DESTINATION_BRANCH` is known, check if an open PR exists from the current branch **toward that exact destination**:
 ```
-gh pr list --head <current-branch> --base <DESTINATION_BRANCH> --state open --json number,title,url 2>/dev/null
+gh pr list --head <CURRENT_BRANCH> --base <DESTINATION_BRANCH> --state open --json number,title,url 2>/dev/null
 ```
 
 - **A matching PR exists** → this is an **update flow**. Skip to [Update Flow](#update-flow).
@@ -35,92 +45,69 @@ gh pr list --head <current-branch> --base <DESTINATION_BRANCH> --state open --js
 
 ---
 
-### Step 3 — Determine the feature branch
+### Step 3 — Analyze changes with git-pr-describe
 
-Infer automatically:
-- If the current branch is `DESTINATION_BRANCH` (e.g. `master`, `main`) → a new branch must be created. Continue to Step 4.
-- If the current branch is already a feature branch → skip to Step 5.
+**Call the `git-pr-describe` skill.** It will run `oms-git-diff`, analyze the project, and return a raw JSON object with `title` and `description`.
+
+If `git-pr-describe` reports there is nothing to describe (empty diff), stop and tell the user: "No changes detected — nothing to open a PR for."
+
+Store the result as `PR_TITLE` and `PR_DESCRIPTION`.
 
 ---
 
-### Step 4 — Create the feature branch
+### Step 4 — Determine the feature branch
 
-1. Get the diff between the working tree and `DESTINATION_BRANCH`:
-   ```
-   git diff DESTINATION_BRANCH
-   ```
-2. Analyze the diff to understand the scope and nature of the changes.
-3. Suggest a branch name following these conventions:
-   - Format: `<type>/<short-description>` in kebab-case
-   - Types: `feature/`, `fix/`, `chore/`, `refactor/`, `docs/`, `test/`
-   - Keep the description short and specific (2–5 words)
-   - Examples: `feature/user-authentication`, `fix/login-redirect`, `chore/update-deps`
-4. **Ask the user:** "Does this branch name look good? (or suggest a different one)"
-5. Once confirmed, create and switch to the branch:
+- If `CURRENT_BRANCH` **is** `DESTINATION_BRANCH` → a new branch must be created. Continue to Step 5.
+- If `CURRENT_BRANCH` is already a feature branch → skip to Step 6.
+
+---
+
+### Step 5 — Create the feature branch
+
+A new feature branch is needed because we are on the destination branch.
+
+1. From `PR_TITLE` (Conventional Commits format: `<type>(<scope>): <summary>`), derive a branch name:
+   - Map the type to a prefix: `feat` → `feature/`, `fix` → `fix/`, `refactor` → `refactor/`, `docs` → `docs/`, `test` → `test/`, everything else → `chore/`
+   - Take the summary part (after the `:`), kebab-case it, limit to 2–5 words
+   - Example: `feat(auth): add login endpoint` → `feature/add-login-endpoint`
+2. **Ask the user:** "Does this branch name look good? (or suggest a different one)"
+3. Once confirmed, create and switch to the branch:
    ```
    git checkout -b <confirmed-branch-name>
    ```
 
 ---
 
-### Step 5 — Stage changes and commit
+### Step 6 — Stage changes and commit
 
 1. Stage all changes:
    ```
    git add -A
    ```
-2. Get the staged diff:
+2. Use `PR_TITLE` as the commit subject line — it already follows Conventional Commits format, imperative mood, ≤ 72 chars. Add a body only if the change is genuinely complex.
+3. Commit immediately without asking for confirmation:
    ```
-   git diff --staged
-   ```
-3. Write a commit message following the Conventional Commits specification:
-   - Format: `<type>(<optional-scope>): <short imperative description>`
-   - Types: `feat`, `fix`, `chore`, `refactor`, `docs`, `test`, `style`, `perf`
-   - Subject line: max 72 characters, imperative mood ("add" not "added"), no trailing period
-   - Add a body only if the change is genuinely complex or needs context
-4. Commit immediately without asking for confirmation:
-   ```
-   git commit -m "<message>"
+   git commit -m "<commit-message>"
    ```
 
 ---
 
-### Step 6 — Push the branch
+### Step 7 — Push the branch
 
 ```
 git push -u origin <branch-name>
 ```
 
+If the push fails (e.g. branch protection, diverged history), report the error to the user and stop.
+
 ---
 
-### Step 7 — Open the pull request
+### Step 8 — Open the pull request
 
-1. Using the full diff against `DESTINATION_BRANCH`, write a PR description:
-
+Use `PR_TITLE` and `PR_DESCRIPTION` directly:
 ```
-## Summary
-
-<!-- One or two sentences describing what this PR does and why. -->
-
-## Changes
-
-<!-- Bullet list of the notable changes. Be specific but concise. -->
--
-
-## Testing
-
-<!-- How to verify these changes: manual steps, automated tests, or both. -->
-
-## Notes
-
-<!-- Optional: breaking changes, migration steps, dependencies, or anything reviewers should know. Leave empty if nothing to add. -->
+gh pr create --base <DESTINATION_BRANCH> --title "<PR_TITLE>" --body "<PR_DESCRIPTION>"
 ```
-
-2. Derive the PR title from the commit message.
-3. Create the PR immediately without asking for confirmation:
-   ```
-   gh pr create --base <DESTINATION_BRANCH> --title "<title>" --body "<description>"
-   ```
 
 ---
 
@@ -143,14 +130,10 @@ Triggered when an open PR already exists for the current branch (detected in Ste
    ```
    git add -A
    ```
-2. Get the staged diff:
+2. Look at the staged diff (`git diff --staged`) and write a commit message that describes **only the new incremental changes**, not the whole PR. Follow Conventional Commits format.
+3. Commit immediately without asking for confirmation:
    ```
-   git diff --staged
-   ```
-3. Write a commit message (Conventional Commits) reflecting only the new changes.
-4. Commit immediately without asking for confirmation:
-   ```
-   git commit -m "<message>"
+   git commit -m "<commit-message>"
    ```
 
 ### U2 — Push
@@ -159,16 +142,15 @@ Triggered when an open PR already exists for the current branch (detected in Ste
 git push
 ```
 
+If the push fails, report the error to the user and stop.
+
 ### U3 — Update the PR title and description
 
-1. Get the full diff of the branch against `DESTINATION_BRANCH`:
+1. **Call the `git-pr-describe` skill** to analyze the full branch diff and obtain updated `PR_TITLE` and `PR_DESCRIPTION`.
+2. If `git-pr-describe` reports nothing to describe, skip the update and tell the user.
+3. Otherwise, update the PR without asking for confirmation:
    ```
-   git diff <DESTINATION_BRANCH>...HEAD
-   ```
-2. Rewrite the PR title and description from scratch based on the full diff (not just the new commit), using the same template as Step 7.
-3. Update the PR without asking for confirmation:
-   ```
-   gh pr edit <PR_NUMBER> --title "<updated-title>" --body "<updated-description>"
+   gh pr edit <PR_NUMBER> --title "<PR_TITLE>" --body "<PR_DESCRIPTION>"
    ```
 
 ### Done (update flow)
@@ -176,4 +158,4 @@ git push
 Report a success summary:
 - New commit message
 - PR URL
-- Confirmation that the PR description was updated
+- Confirmation that the PR title and description were updated
