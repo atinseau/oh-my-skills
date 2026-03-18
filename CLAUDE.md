@@ -86,6 +86,6 @@ Command tests are co-located with their source in `src/commands/<name>/<name>.te
 
 ### Guidelines
 
-- When a contribution is made, ensure copilot-instructions.md and claude.md are updated with any relevant information about new commands, architectural changes, or conventions, only updating the relevant sections and only if necessary
+- When a contribution is made, ensure claude.md are updated with any relevant information about new commands, architectural changes, or conventions, only updating the relevant sections and only if necessary
 
 - If a critical behavior is added or changed, it should be reflected in the tests
