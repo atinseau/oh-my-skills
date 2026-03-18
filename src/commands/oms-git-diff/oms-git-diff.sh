@@ -18,6 +18,35 @@ oms-git-diff() {
     fi
 
     # -----------------------------------------------------------
+    # Direct diff mode — branch name passed as argument
+    # -----------------------------------------------------------
+    if [[ -n "$1" ]]; then
+        local target_ref="$1"
+        # Resolve: prefer origin/<branch>, fall back to the ref as-is
+        local resolved_ref
+        if git rev-parse --verify "origin/$target_ref" &>/dev/null; then
+            resolved_ref="origin/$target_ref"
+        elif git rev-parse --verify "$target_ref" &>/dev/null; then
+            resolved_ref="$target_ref"
+        else
+            echo "oms-git-diff: unknown branch or ref '$target_ref'" >&2
+            return 1
+        fi
+        local merge_base
+        merge_base=$(git merge-base HEAD "$resolved_ref" 2>/dev/null || echo "")
+        if [[ -z "$merge_base" ]]; then
+            echo "oms-git-diff: no common ancestor with '$target_ref'" >&2
+            return 1
+        fi
+        local diff_output
+        diff_output=$(git diff "$merge_base..HEAD" 2>/dev/null)
+        if [[ -n "$diff_output" ]]; then
+            printf '%s\n' "$diff_output"
+        fi
+        return 0
+    fi
+
+    # -----------------------------------------------------------
     # Step 1 — Determine branch type: integration vs feature
     # -----------------------------------------------------------
     local local_head remote_head branch_type
@@ -25,7 +54,16 @@ oms-git-diff() {
     remote_head=$(git rev-parse "origin/$current" 2>/dev/null || echo "")
 
     if [[ -n "$remote_head" && "$local_head" == "$remote_head" ]]; then
-        branch_type="integration"
+        # Branch is in sync with its remote. Treat as integration UNLESS the
+        # branch name follows a feature-branch naming convention — in that case
+        # it is a pushed (but fully-synced) feature branch and we still want
+        # the commit diff against the base branch.
+        case "$current" in
+            feature/*|feat/*|fix/*|bugfix/*|hotfix/*|chore/*|refactor/*|docs/*|topic/*)
+                branch_type="feature" ;;
+            *)
+                branch_type="integration" ;;
+        esac
     else
         branch_type="feature"
     fi

@@ -19,9 +19,15 @@ oms-git-diff
 
 This command automatically:
 - Detects whether you are on a **feature branch** or an **integration branch** (e.g. `main`, `stage`, `develop`).
-- For feature branches: finds the closest parent branch (via existing PR base, merge-base heuristic, or remote HEAD fallback) and diffs only the developer's commits.
+- For feature branches: finds the closest parent branch (via existing PR base, merge-base heuristic, or remote HEAD fallback) and diffs only the developer's commits. Branches that follow standard prefixes (`feature/`, `fix/`, `feat/`, `bugfix/`, `hotfix/`, `chore/`, `refactor/`, `docs/`, `topic/`) are correctly identified as feature branches even when fully pushed and in sync with their remote.
 - For integration branches: skips commit diff entirely and looks at staged or unstaged changes.
 - Falls back through the cascade: commit diff → `git diff --staged` → `git diff`.
+
+If auto-detection produces an unexpected diff, you can pass an explicit base branch:
+```
+oms-git-diff <branch>
+```
+This computes `git diff <merge-base>..<HEAD>` against `origin/<branch>` (or the local ref if no remote exists), bypassing all heuristics.
 
 If `oms-git-diff` produces **no output**, tell the user there is nothing to describe and stop here.
 

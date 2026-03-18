@@ -440,4 +440,112 @@ describe("oms-git-diff command", () => {
 			git("branch -D feature/unpushed");
 		});
 	});
+
+	// ===========================================================
+	// Direct diff mode (branch name argument)
+	// ===========================================================
+
+	describe("direct diff mode: explicit branch argument", () => {
+		it("should diff HEAD against the given branch name", () => {
+			git("checkout develop");
+			git("checkout -b feature/direct-diff-test");
+			exec(
+				id,
+				`cd ${REPO} && echo "direct-content" > direct.txt && git add . && git commit -m "direct"`,
+			);
+
+			// Pass "main" explicitly — should diff against origin/main
+			const result = exec(
+				id,
+				`cd ${REPO} && bash -c 'source ${CMD} && oms-git-diff main'`,
+			);
+			expect(result.exitCode).toBe(0);
+
+			// Should include the feature commit AND the develop commits (all vs main)
+			expect(result.output).toContain("direct-content");
+			expect(result.output).toContain("file-e");
+			expect(result.output).toContain("file-f");
+
+			// Should NOT include main commits (a, b are already in main)
+			expect(result.output).not.toContain("file-a");
+			expect(result.output).not.toContain("file-b");
+
+			// Cleanup
+			git("checkout develop");
+			git("branch -D feature/direct-diff-test");
+		});
+
+		it("should diff HEAD against a local branch ref when no origin/ exists", () => {
+			git("checkout main");
+			git("checkout -b feature/local-ref-test");
+			exec(
+				id,
+				`cd ${REPO} && echo "local-ref" > local-ref.txt && git add . && git commit -m "local-ref"`,
+			);
+
+			// Pass "main" — origin/main exists so it resolves to origin/main
+			const result = exec(
+				id,
+				`cd ${REPO} && bash -c 'source ${CMD} && oms-git-diff main'`,
+			);
+			expect(result.exitCode).toBe(0);
+			expect(result.output).toContain("local-ref");
+
+			// Cleanup
+			git("checkout main");
+			git("branch -D feature/local-ref-test");
+		});
+
+		it("should return error for an unknown branch", () => {
+			git("checkout main");
+
+			const result = exec(
+				id,
+				`cd ${REPO} && bash -c 'source ${CMD} && oms-git-diff nonexistent-branch-xyz 2>&1'`,
+			);
+			expect(result.exitCode).toBe(1);
+			expect(result.output).toContain("unknown branch or ref");
+		});
+	});
+
+	describe("feature branch fully pushed (local == origin/feature)", () => {
+		it("should show all feature commits vs base, not treat it as integration", () => {
+			git("checkout develop");
+			git("checkout -b feature/pushed-fully");
+			exec(
+				id,
+				`cd ${REPO} && echo "pushed-1" > pushed1.txt && git add . && git commit -m "P1"`,
+			);
+			exec(
+				id,
+				`cd ${REPO} && echo "pushed-2" > pushed2.txt && git add . && git commit -m "P2"`,
+			);
+			exec(
+				id,
+				`cd ${REPO} && echo "pushed-3" > pushed3.txt && git add . && git commit -m "P3"`,
+			);
+
+			// Simulate pushing: set up origin/feature/pushed-fully at the same commit
+			// (push to the local remote repo used in setup)
+			exec(id, `cd ${REPO} && git push ${REMOTE} feature/pushed-fully`);
+			// local HEAD == origin/feature/pushed-fully now
+			exec(id, `cd ${REPO} && git fetch origin`);
+
+			const result = runDiff();
+			expect(result.exitCode).toBe(0);
+
+			// All 3 feature commits should appear in the diff
+			expect(result.output).toContain("pushed-1");
+			expect(result.output).toContain("pushed-2");
+			expect(result.output).toContain("pushed-3");
+
+			// Should NOT contain develop history
+			expect(result.output).not.toContain("file-e");
+			expect(result.output).not.toContain("file-f");
+
+			// Cleanup
+			git("checkout develop");
+			git("branch -D feature/pushed-fully");
+		});
+	});
 });
