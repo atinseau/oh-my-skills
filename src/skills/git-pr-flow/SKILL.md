@@ -47,9 +47,15 @@ gh pr list --head <CURRENT_BRANCH> --base <DESTINATION_BRANCH> --state open --js
 
 ### Step 3 — Analyze changes with git-pr-describe
 
-**Call the `git-pr-describe` skill.** It will run `oms-git-diff`, analyze the project, and return a raw JSON object with `title` and `description`.
+**You MUST use the `Agent` tool** to run `git-pr-describe` in a dedicated sub-agent. Do NOT invoke the `git-pr-describe` skill directly in this conversation — the diff output is too large and will cause context compression that breaks the workflow.
 
-If `git-pr-describe` reports there is nothing to describe (empty diff), stop and tell the user: "No changes detected — nothing to open a PR for."
+Launch the agent with:
+- **description:** `"generate PR title and description"`
+- **prompt:** `"You are in the repository at <REPO_PATH>. Run the git-pr-describe skill. Return ONLY the raw JSON object it produces (with title and description keys). If the diff is empty, return the single word EMPTY."`
+
+Wait for the agent to return. Parse the JSON from its response.
+
+If the agent returns "EMPTY", stop and tell the user: "No changes detected — nothing to open a PR for."
 
 Store the result as `PR_TITLE` and `PR_DESCRIPTION`.
 
@@ -146,8 +152,8 @@ If the push fails, report the error to the user and stop.
 
 ### U3 — Update the PR title and description
 
-1. **Call the `git-pr-describe` skill** to analyze the full branch diff and obtain updated `PR_TITLE` and `PR_DESCRIPTION`.
-2. If `git-pr-describe` reports nothing to describe, skip the update and tell the user.
+1. **You MUST use the `Agent` tool** (same pattern as Step 3): launch a dedicated sub-agent to execute the `git-pr-describe` skill and return the JSON with updated `PR_TITLE` and `PR_DESCRIPTION`.
+2. If the sub-agent returns "EMPTY", skip the update and tell the user.
 3. Otherwise, update the PR without asking for confirmation:
    ```
    gh pr edit <PR_NUMBER> --title "<PR_TITLE>" --body "<PR_DESCRIPTION>"
