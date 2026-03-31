@@ -14,6 +14,16 @@ Before anything else, verify these requirements. If any check fails, stop and te
 
 ---
 
+## Quick Path — Tag-only release
+
+If the user specifies that changes are already merged (e.g., "just tag", "skip PR", "already merged"), or if `git status --short` is clean and there are no unpushed commits:
+
+1. Skip Steps 1–3 entirely.
+2. Ask which branch to tag (default: the current branch).
+3. Continue from Step 4 (Determine latest tag).
+
+---
+
 ## Workflow
 
 Execute all steps automatically without asking for confirmation, except where explicitly noted.
