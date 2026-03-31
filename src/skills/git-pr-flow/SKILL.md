@@ -4,23 +4,21 @@ description: Automate branch creation, commit, and pull request opening by deleg
 by: oh-my-skills
 ---
 
-## Prerequisites
+## Prerequisites + Context
 
-Before anything else, verify these requirements. If any check fails, stop and tell the user what is missing.
+Run all prerequisites and context gathering in a single command:
+```bash
+git rev-parse --is-inside-work-tree && gh auth status 2>&1 && git remote get-url origin && echo "---CONTEXT---" && git branch --show-current && git status --short && echo "---DEFAULT_BRANCH---" && (git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || true)
+```
 
-1. **Inside a git repository:** `git rev-parse --is-inside-work-tree`
-2. **GitHub CLI installed and authenticated:** `gh auth status`
-3. **Remote `origin` exists:** `git remote get-url origin`
+If any prerequisite fails (git, gh, or remote), stop and tell the user what is missing.
 
----
+From the output, extract:
+- `CURRENT_BRANCH` — the line after `---CONTEXT---`
+- Working tree status — the lines between `CURRENT_BRANCH` and `---DEFAULT_BRANCH---`
+- `DEFAULT_BRANCH` — the line after `---DEFAULT_BRANCH---` (may be empty if detection fails)
 
-## Workflow
-
-Collect the current git context:
-- `git branch --show-current` → `CURRENT_BRANCH`
-- `git status --short` → working tree status
-
-If `git status --short` returns nothing (clean working tree) and there are no unpushed commits, stop immediately and tell the user: "Nothing to commit — your working tree is clean."
+If working tree status is empty (clean working tree) and there are no unpushed commits, stop immediately and tell the user: "Nothing to commit — your working tree is clean."
 
 Execute all steps automatically without asking for confirmation, except where explicitly noted.
 
@@ -28,14 +26,9 @@ Execute all steps automatically without asking for confirmation, except where ex
 
 ### Step 1 — Determine the destination branch
 
-Detect the default branch:
-```
-git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'
-```
+If `DEFAULT_BRANCH` was detected, propose it as default: "Destination branch for this PR? (default: `<DEFAULT_BRANCH>`)"
 
-If detected, propose it as default: "Destination branch for this PR? (default: `<detected>`)"
-
-If detection fails, ask without a default: "What is the destination branch for this PR?"
+If `DEFAULT_BRANCH` is empty, ask without a default: "What is the destination branch for this PR?"
 
 Store the answer as `DESTINATION_BRANCH`.
 
@@ -93,21 +86,13 @@ A new feature branch is needed because we are on the destination branch.
 
 ### Step 6 — Stage changes and commit
 
-1. Review what will be staged:
+1. Review, stage, and summarize in a single command:
+   ```bash
+   git status --short && git add -A && git diff --staged --stat
    ```
-   git status --short
-   ```
-2. **Safety check:** scan the output for sensitive file patterns (`.env`, `.env.*`, `credentials`, `*.key`, `*.pem`, `secret`, `token`). If any are found, warn the user and ask which files to exclude before staging.
-3. Stage all changes:
-   ```
-   git add -A
-   ```
-4. Show the staged summary to the user so they can see what will be committed:
-   ```
-   git diff --staged --stat
-   ```
-5. Use `PR_TITLE` as the commit subject line — it already follows Conventional Commits format, imperative mood, ≤ 72 chars. Add a body only if the change is genuinely complex.
-6. Commit immediately without asking for confirmation:
+2. **Safety check:** scan the `git status` output (the lines before the `--stat` summary) for sensitive file patterns (`.env`, `.env.*`, `credentials`, `*.key`, `*.pem`, `secret`, `token`). If any are found, unstage them (`git reset HEAD <file>`), warn the user and ask which files to exclude.
+3. Use `PR_TITLE` as the commit subject line — it already follows Conventional Commits format, imperative mood, ≤ 72 chars. Add a body only if the change is genuinely complex.
+4. Commit immediately without asking for confirmation:
    ```
    git commit -m "<commit-message>"
    ```
@@ -151,17 +136,13 @@ Triggered when an open PR already exists for the current branch (detected in Ste
 
 ### U1 — Stage and commit new changes
 
-1. Review what will be staged:
+1. Review and stage in a single command:
+   ```bash
+   git status --short && git add -A
    ```
-   git status --short
-   ```
-2. **Safety check:** scan the output for sensitive file patterns (`.env`, `.env.*`, `credentials`, `*.key`, `*.pem`, `secret`, `token`). If any are found, warn the user and ask which files to exclude before staging.
-3. Stage all changes:
-   ```
-   git add -A
-   ```
-4. Look at the staged diff (`git diff --staged`) and write a commit message that describes **only the new incremental changes**, not the whole PR. Follow Conventional Commits format.
-5. Commit immediately without asking for confirmation:
+2. **Safety check:** scan the `git status` output for sensitive file patterns (`.env`, `.env.*`, `credentials`, `*.key`, `*.pem`, `secret`, `token`). If any are found, unstage them (`git reset HEAD <file>`), warn the user and ask which files to exclude.
+3. Look at the staged diff (`git diff --staged`) and write a commit message that describes **only the new incremental changes**, not the whole PR. Follow Conventional Commits format.
+4. Commit immediately without asking for confirmation:
    ```
    git commit -m "<commit-message>"
    ```
