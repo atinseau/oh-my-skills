@@ -203,6 +203,22 @@ describe("oms-run-all command", () => {
 	});
 
 	// ===========================================================
+	// Stream then batch (--then after --stream)
+	// ===========================================================
+
+	describe("stream then batch", () => {
+		it("should run stream step then continue to batch step", () => {
+			const result = run(
+				'--stream /repos/repo1="echo streaming" --then /repos/repo1="echo cleanup"',
+			);
+			expect(result.exitCode).toBe(0);
+			expect(result.output).toContain("stream mode");
+			expect(result.output).toContain("streaming");
+			expect(result.output).toContain("cleanup");
+		});
+	});
+
+	// ===========================================================
 	// Alias
 	// ===========================================================
 
