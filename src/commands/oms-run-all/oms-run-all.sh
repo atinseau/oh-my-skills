@@ -63,22 +63,21 @@ __oms_ra_launch_one() {
     local safe
     safe=$(__oms_ra_sanitize "$dir")
     (
+        # Write exit code on any exit (including `exit N` inside eval'd commands)
+        trap 'printf "%d" "$?" > "${tmpdir}/${safe}.rc"' EXIT
         if [[ ! -d "$dir" ]]; then
             printf 'directory not found: %s\n' "$dir" > "${tmpdir}/${safe}.out" 2>&1
-            printf '1' > "${tmpdir}/${safe}.rc"
-            return
+            exit 1
         fi
         cd "$dir" || {
             printf 'cannot cd into: %s\n' "$dir" > "${tmpdir}/${safe}.out" 2>&1
-            printf '1' > "${tmpdir}/${safe}.rc"
-            return
+            exit 1
         }
         FORCE_COLOR=1 \
         GIT_CONFIG_COUNT=1 \
         GIT_CONFIG_KEY_0=color.ui \
         GIT_CONFIG_VALUE_0=always \
         eval "$cmd" > "${tmpdir}/${safe}.out" 2>&1
-        printf '%d' "$?" > "${tmpdir}/${safe}.rc"
     ) &
 }
 

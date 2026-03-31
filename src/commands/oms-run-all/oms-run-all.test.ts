@@ -118,9 +118,7 @@ describe("oms-run-all command", () => {
 
 	describe("failure propagation", () => {
 		it("should report failure for failed repos and success for passing ones", () => {
-			// Use "false" instead of "exit 1" — exit would terminate the subshell
-			// before the .rc file is written, causing the spinner to hang.
-			const result = run('/repos/repo1="false" /repos/repo2="echo ok"');
+			const result = run('/repos/repo1="exit 1" /repos/repo2="echo ok"');
 			expect(result.exitCode).not.toBe(0);
 			expect(result.output).toContain("/repos/repo1");
 			expect(result.output).toContain("/repos/repo2");
@@ -133,10 +131,8 @@ describe("oms-run-all command", () => {
 
 	describe("failure does not stop pipeline", () => {
 		it("should continue to step 2 even if step 1 fails", () => {
-			// Use "false" instead of "exit 1" — exit would terminate the subshell
-			// before the .rc file is written, causing the spinner to hang.
 			const result = run(
-				'/repos/repo1="false" --then /repos/repo2="echo after-fail"',
+				'/repos/repo1="exit 1" --then /repos/repo2="echo after-fail"',
 			);
 			expect(result.exitCode).not.toBe(0);
 			expect(result.output).toContain("/repos/repo2");
