@@ -76,6 +76,32 @@ EOF`,
 		expect(recorded.output).toBe("--manual");
 	});
 
+	it("should print version with --version", () => {
+		exec(id, `mkdir -p ${HOME}/.oh-my-skills`);
+		exec(
+			id,
+			`echo '{"version":"1.2.3"}' > ${HOME}/.oh-my-skills/registry.json`,
+		);
+
+		const result = exec(
+			id,
+			`bash -lc 'source /commands/oms-cli/oms.sh && oms --version'`,
+		);
+
+		expect(result.exitCode).toBe(0);
+		expect(result.output).toBe("oh-my-skills v1.2.3");
+	});
+
+	it("should print version with version subcommand", () => {
+		const result = exec(
+			id,
+			`bash -lc 'source /commands/oms-cli/oms.sh && oms version'`,
+		);
+
+		expect(result.exitCode).toBe(0);
+		expect(result.output).toBe("oh-my-skills v1.2.3");
+	});
+
 	it("should fail for unknown subcommands", () => {
 		const result = exec(
 			id,

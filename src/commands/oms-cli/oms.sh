@@ -15,16 +15,30 @@ oms() {
             shift
             bash "$update_script" --manual "$@"
             ;;
+        version|--version|-v)
+            local registry="$install_dir/registry.json"
+            local version="unknown"
+            if [[ -f "$registry" ]]; then
+                if command -v jq &>/dev/null; then
+                    version=$(jq -r '.version // "unknown"' "$registry")
+                else
+                    version=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$registry" 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+                fi
+            fi
+            echo "oh-my-skills v${version}"
+            ;;
         help|""|--help)
             cat <<'EOF'
 Usage: oms <command>
 
 Commands:
   update      Update oh-my-skills to the latest version
+  version     Show installed version
   help        Show this help message
 
 Options:
   --help      Show this help message
+  --version   Show installed version
 EOF
             ;;
         *)
