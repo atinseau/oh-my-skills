@@ -137,10 +137,17 @@ spawn_background_fetch() {
 fetch_repo_metadata() {
     cd "$INSTALL_DIR"
 
+    # --force overwrites local tags that diverge from remote (e.g. re-pushed releases)
     if [[ "$(git rev-parse --is-shallow-repository 2>/dev/null || echo false)" == "true" ]]; then
-        git fetch origin --tags --unshallow 2>/dev/null || git fetch origin --tags --depth=200 2>/dev/null
+        git fetch origin --tags --force --unshallow 2>/dev/null || git fetch origin --tags --force --depth=200 2>/dev/null || {
+            log_error "Failed to fetch repository metadata (shallow repo)"
+            return 1
+        }
     else
-        git fetch origin --tags 2>/dev/null
+        git fetch origin --tags --force 2>/dev/null || {
+            log_error "Failed to fetch repository metadata"
+            return 1
+        }
     fi
 }
 
@@ -156,7 +163,10 @@ update_repo() {
     local new_version="$1"
 
     cd "$INSTALL_DIR"
-    git checkout "v${new_version}" 2>/dev/null || git checkout "origin/master" 2>/dev/null
+    git checkout "v${new_version}" 2>/dev/null || git checkout "origin/master" 2>/dev/null || {
+        log_error "Failed to checkout v${new_version} or origin/master"
+        return 1
+    }
 
     log_success "Repository updated to ${CYAN}$new_version${NC}"
 }
