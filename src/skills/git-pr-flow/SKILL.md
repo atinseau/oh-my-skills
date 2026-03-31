@@ -47,15 +47,17 @@ gh pr list --head <CURRENT_BRANCH> --base <DESTINATION_BRANCH> --state open --js
 
 ### Step 3 — Analyze changes with git-pr-describe
 
-**You MUST use the `Agent` tool** to run `git-pr-describe` in a dedicated sub-agent. Do NOT invoke the `git-pr-describe` skill directly in this conversation — the diff output is too large and will cause context compression that breaks the workflow.
+Run `oms-git-diff` to obtain the diff output.
 
-Launch the agent with:
-- **description:** `"generate PR title and description"`
-- **prompt:** `"You are in the repository at <REPO_PATH>. Run the git-pr-describe skill. Return ONLY the raw JSON object it produces (with title and description keys). If the diff is empty, return the single word EMPTY."`
+If `oms-git-diff` produces **no output**, stop and tell the user: "No changes detected — nothing to open a PR for."
 
-Wait for the agent to return. Parse the JSON from its response.
+**Choose the execution mode based on diff size:**
 
-If the agent returns "EMPTY", stop and tell the user: "No changes detected — nothing to open a PR for."
+- **Under 200 lines:** analyze the diff directly in this conversation using the `git-pr-describe` skill rules. Skip Step 2 of git-pr-describe (project inspection) — the diff itself provides sufficient context. Return the JSON with `title` and `description` keys.
+
+- **200 lines or more:** delegate to a sub-agent to protect context. Launch the agent with:
+  - **description:** `"generate PR title and description"`
+  - **prompt:** `"You are in the repository at <REPO_PATH>. Run the git-pr-describe skill but skip Step 2 (project inspection) — the diff provides sufficient context. Return ONLY the raw JSON object it produces (with title and description keys). If the diff is empty, return the single word EMPTY."`
 
 Store the result as `PR_TITLE` and `PR_DESCRIPTION`.
 
@@ -160,9 +162,12 @@ If the push fails:
 
 ### U3 — Update the PR title and description
 
-1. **You MUST use the `Agent` tool** (same pattern as Step 3): launch a dedicated sub-agent to execute the `git-pr-describe` skill and return the JSON with updated `PR_TITLE` and `PR_DESCRIPTION`.
-2. If the sub-agent returns "EMPTY", skip the update and tell the user.
-3. Otherwise, update the PR without asking for confirmation:
+1. Run `oms-git-diff` to obtain the diff output.
+2. **Choose the execution mode based on diff size** (same logic as Step 3):
+   - **Under 200 lines:** analyze inline using the `git-pr-describe` rules, skipping Step 2 (project inspection).
+   - **200 lines or more:** delegate to a sub-agent with the same prompt as Step 3.
+3. If the result is empty, skip the update and tell the user.
+4. Otherwise, update the PR without asking for confirmation:
    ```
    gh pr edit <PR_NUMBER> --title "<PR_TITLE>" --body "<PR_DESCRIPTION>"
    ```
