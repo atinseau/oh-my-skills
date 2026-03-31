@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-DEFAULT_TAG="" # Set by release workflow in tagged installer commits; kept empty on master
+DEFAULT_TAG="v0.1.8" # Set by release workflow in tagged installer commits; kept empty on master
 
 load_lib() {
     if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]%/*}/lib.sh" ]]; then
