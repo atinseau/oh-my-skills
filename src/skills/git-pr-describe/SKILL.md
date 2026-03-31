@@ -31,9 +31,11 @@ This computes `git diff <merge-base>..<HEAD>` against `origin/<branch>` (or the 
 
 If `oms-git-diff` produces **no output**, tell the user there is nothing to describe and stop here.
 
+If the diff exceeds **500 lines**, do not describe every change individually. Instead, group changes by file or module and summarize the intent of each group. Prioritize clarity over exhaustiveness — the reviewer can read the diff for line-level details.
+
 ### Step 2 — Understand the project
 
-Inspect the repository to understand the project: language, framework, package manager, directory layout. Use this knowledge to give precise, idiomatic descriptions — but never hardcode assumptions about any specific stack.
+Read only the top-level directory listing and `package.json` (or equivalent manifest: `Cargo.toml`, `go.mod`, `pyproject.toml`, etc.) to identify the language, framework, and project structure. Do not explore deeper unless the diff references files you cannot understand from their path alone.
 
 If the user provides additional context (ticket number, feature name, etc.), incorporate it.
 
@@ -106,9 +108,9 @@ End the description with a line containing only: `🚀`
 
 ---
 
-## Internal Verification (do not output)
+## Internal Verification
 
-Before returning the JSON, silently check:
+Run this checklist internally before returning. Output only the final JSON — never output these checks.
 
 1. Title ≤ 72 chars, imperative mood, conventional commit format, zero backticks.
 2. Only sections with actual diff-backed content are present.
