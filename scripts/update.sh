@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-DEFAULT_TAG="v0.1.9" # Set by release workflow in tagged installer commits; kept empty on master
+DEFAULT_TAG="" # Set by release workflow in tagged installer commits; kept empty on master
 
 # Cache configuration
 UPDATE_CACHE_FILE="${HOME}/.oh-my-skills/.update-cache"
