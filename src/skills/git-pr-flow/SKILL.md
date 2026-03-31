@@ -129,9 +129,9 @@ If the push fails:
 
 ### Step 8 — Open the pull request
 
-Use `PR_TITLE` and `PR_DESCRIPTION` directly:
+Use `PR_TITLE` and `PR_DESCRIPTION` directly. If the user mentioned "draft" or "WIP" at any point during the flow, append `--draft`:
 ```
-gh pr create --base <DESTINATION_BRANCH> --title "<PR_TITLE>" --body "<PR_DESCRIPTION>"
+gh pr create --base <DESTINATION_BRANCH> --title "<PR_TITLE>" --body "<PR_DESCRIPTION>" [--draft]
 ```
 
 ---
