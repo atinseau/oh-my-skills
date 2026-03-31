@@ -85,6 +85,19 @@ Wait for the user to choose. Store as `NEW_TAG`.
 
 ---
 
+### Step 5b — Verify version consistency
+
+Check if a version-bearing manifest exists in the repository root:
+```bash
+cat package.json 2>/dev/null | grep '"version"' || cat Cargo.toml 2>/dev/null | grep '^version' || echo "NO_MANIFEST"
+```
+
+If a manifest is found, compare its version with `NEW_TAG` (without the `v` prefix):
+- **Versions match** → continue.
+- **Versions differ** → warn the user: "The manifest version (`<manifest_version>`) does not match the release tag (`<NEW_TAG>`). This may indicate the version was not bumped in code. Continue anyway?" Wait for confirmation before proceeding.
+
+---
+
 ### Step 6 — Create tag and release
 
 First, verify the tag does not already exist:
