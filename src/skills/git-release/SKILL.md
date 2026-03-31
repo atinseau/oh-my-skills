@@ -47,7 +47,7 @@ Store as `DESTINATION_BRANCH`.
 Run a single shell loop that polls the PR state every 5 seconds:
 
 ```bash
-elapsed=0; while [ $elapsed -lt 900 ]; do state=$(gh pr view <PR_NUMBER> --json state -q '.state' 2>/dev/null); if [ "$state" = "MERGED" ]; then echo "MERGED"; exit 0; elif [ "$state" = "CLOSED" ]; then echo "CLOSED"; exit 1; fi; sleep 5; elapsed=$((elapsed + 5)); done; echo "TIMEOUT"; exit 2
+elapsed=0; while [ $elapsed -lt 900 ]; do state=$(gh pr view <PR_NUMBER> --json state -q '.state' 2>/dev/null); if [ "$state" = "MERGED" ]; then echo "MERGED"; exit 0; elif [ "$state" = "CLOSED" ]; then echo "CLOSED"; exit 1; fi; sleep 15; elapsed=$((elapsed + 15)); done; echo "TIMEOUT"; exit 2
 ```
 
 - If the output is `MERGED` → continue to Step 4.
@@ -92,6 +92,12 @@ First, verify the tag does not already exist:
 git tag --list '<NEW_TAG>'
 ```
 If it already exists, tell the user and ask how to proceed (choose a different version or abort).
+
+Before switching branches, verify the working tree is clean:
+```bash
+git status --short
+```
+If there are uncommitted changes, stash them (`git stash`) or ask the user how to proceed.
 
 Then create the tag and release:
 ```bash
