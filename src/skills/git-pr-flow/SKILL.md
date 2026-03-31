@@ -26,9 +26,16 @@ Execute all steps automatically without asking for confirmation, except where ex
 
 ---
 
-### Step 1 — Ask for the destination branch
+### Step 1 — Determine the destination branch
 
-**Always ask the user:** "What is the destination branch for this PR?"
+Detect the default branch:
+```
+git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'
+```
+
+If detected, propose it as default: "Destination branch for this PR? (default: `<detected>`)"
+
+If detection fails, ask without a default: "What is the destination branch for this PR?"
 
 Store the answer as `DESTINATION_BRANCH`.
 
@@ -113,7 +120,10 @@ A new feature branch is needed because we are on the destination branch.
 git push -u origin <branch-name>
 ```
 
-If the push fails (e.g. branch protection, diverged history), report the error to the user and stop.
+If the push fails:
+- **Diverged history:** suggest `git pull --rebase origin <branch-name>` and retry the push after rebase succeeds.
+- **Branch protection or permission error:** report the error to the user and stop.
+- **Any other error:** report the raw error to the user and stop.
 
 ---
 
@@ -162,7 +172,10 @@ Triggered when an open PR already exists for the current branch (detected in Ste
 git push
 ```
 
-If the push fails, report the error to the user and stop.
+If the push fails:
+- **Diverged history:** suggest `git pull --rebase origin <branch-name>` and retry the push after rebase succeeds.
+- **Branch protection or permission error:** report the error to the user and stop.
+- **Any other error:** report the raw error to the user and stop.
 
 ### U3 — Update the PR title and description
 
