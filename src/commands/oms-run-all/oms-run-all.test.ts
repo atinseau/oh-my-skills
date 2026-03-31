@@ -222,6 +222,38 @@ describe("oms-run-all command", () => {
 	// Alias
 	// ===========================================================
 
+	describe("non-TTY output", () => {
+		it("should not output spinner escape codes when piped", () => {
+			const result = exec(
+				id,
+				`bash -c 'source ${CMD} && oms-run-all /repos/repo1="echo piped" 2>&1 | cat'`,
+			);
+			expect(result.exitCode).toBe(0);
+			expect(result.output).not.toContain("⠋");
+			expect(result.output).not.toContain("⠙");
+			expect(result.output).toContain("/repos/repo1");
+		});
+	});
+
+	// ===========================================================
+	// Path normalization
+	// ===========================================================
+
+	describe("path normalization", () => {
+		it("should handle ./ prefix in directory paths", () => {
+			const result = exec(
+				id,
+				`bash -c 'cd /repos && source ${CMD} && oms-run-all ./repo1="echo normalized" 2>&1'`,
+			);
+			expect(result.exitCode).toBe(0);
+			expect(result.output).toContain("normalized");
+		});
+	});
+
+	// ===========================================================
+	// Alias
+	// ===========================================================
+
 	describe("oms-ra alias", () => {
 		it("should produce the same output as oms-run-all", () => {
 			const result = runAlias("--help");
