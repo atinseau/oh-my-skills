@@ -54,7 +54,7 @@ Store as `DESTINATION_BRANCH`.
 
 ### Step 3 — Wait for merge
 
-Run a single shell loop that polls the PR state every 5 seconds:
+Run a single shell loop that polls the PR state every 15 seconds:
 
 ```bash
 elapsed=0; while [ $elapsed -lt 900 ]; do state=$(gh pr view <PR_NUMBER> --json state -q '.state' 2>/dev/null); if [ "$state" = "MERGED" ]; then echo "MERGED"; exit 0; elif [ "$state" = "CLOSED" ]; then echo "CLOSED"; exit 1; fi; sleep 15; elapsed=$((elapsed + 15)); done; echo "TIMEOUT"; exit 2
