@@ -6,11 +6,12 @@ by: oh-my-skills
 
 ## Prerequisites
 
-Before anything else, verify these requirements. If any check fails, stop and tell the user what is missing.
+Run all prerequisite checks in a single command:
+```bash
+git rev-parse --is-inside-work-tree && gh auth status 2>&1 && git remote get-url origin
+```
 
-1. **Inside a git repository:** `git rev-parse --is-inside-work-tree`
-2. **GitHub CLI installed and authenticated:** `gh auth status`
-3. **Remote `origin` exists:** `git remote get-url origin`
+If any check fails, stop and tell the user what is missing.
 
 ---
 

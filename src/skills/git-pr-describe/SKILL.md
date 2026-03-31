@@ -35,7 +35,9 @@ If the diff exceeds **500 lines**, do not describe every change individually. In
 
 ### Step 2 — Understand the project
 
-Read only the top-level directory listing and `package.json` (or equivalent manifest: `Cargo.toml`, `go.mod`, `pyproject.toml`, etc.) to identify the language, framework, and project structure. Do not explore deeper unless the diff references files you cannot understand from their path alone.
+**If your prompt says to skip this step, skip it entirely** — the diff provides sufficient context from file paths and code patterns.
+
+Otherwise: read only the top-level directory listing and `package.json` (or equivalent manifest: `Cargo.toml`, `go.mod`, `pyproject.toml`, etc.) to identify the language, framework, and project structure. Do not explore deeper unless the diff references files you cannot understand from their path alone.
 
 If the user provides additional context (ticket number, feature name, etc.), incorporate it.
 
