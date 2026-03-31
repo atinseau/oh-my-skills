@@ -86,12 +86,21 @@ A new feature branch is needed because we are on the destination branch.
 
 ### Step 6 — Stage changes and commit
 
-1. Stage all changes:
+1. Review what will be staged:
+   ```
+   git status --short
+   ```
+2. **Safety check:** scan the output for sensitive file patterns (`.env`, `.env.*`, `credentials`, `*.key`, `*.pem`, `secret`, `token`). If any are found, warn the user and ask which files to exclude before staging.
+3. Stage all changes:
    ```
    git add -A
    ```
-2. Use `PR_TITLE` as the commit subject line — it already follows Conventional Commits format, imperative mood, ≤ 72 chars. Add a body only if the change is genuinely complex.
-3. Commit immediately without asking for confirmation:
+4. Show the staged summary to the user so they can see what will be committed:
+   ```
+   git diff --staged --stat
+   ```
+5. Use `PR_TITLE` as the commit subject line — it already follows Conventional Commits format, imperative mood, ≤ 72 chars. Add a body only if the change is genuinely complex.
+6. Commit immediately without asking for confirmation:
    ```
    git commit -m "<commit-message>"
    ```
@@ -132,12 +141,17 @@ Triggered when an open PR already exists for the current branch (detected in Ste
 
 ### U1 — Stage and commit new changes
 
-1. Stage all changes:
+1. Review what will be staged:
+   ```
+   git status --short
+   ```
+2. **Safety check:** scan the output for sensitive file patterns (`.env`, `.env.*`, `credentials`, `*.key`, `*.pem`, `secret`, `token`). If any are found, warn the user and ask which files to exclude before staging.
+3. Stage all changes:
    ```
    git add -A
    ```
-2. Look at the staged diff (`git diff --staged`) and write a commit message that describes **only the new incremental changes**, not the whole PR. Follow Conventional Commits format.
-3. Commit immediately without asking for confirmation:
+4. Look at the staged diff (`git diff --staged`) and write a commit message that describes **only the new incremental changes**, not the whole PR. Follow Conventional Commits format.
+5. Commit immediately without asking for confirmation:
    ```
    git commit -m "<commit-message>"
    ```
