@@ -1,25 +1,26 @@
 {
-  "permissions": {
-    "allow": [
-      "WebSearch",
-      "Bash(bun install:*)",
-      "Bash(bun test:*)",
-      "Bash(docker:*)",
-      "WebFetch(domain:testcontainers.com)",
-      "WebFetch(domain:node.testcontainers.org)",
-      "Bash(sed:*)",
-      "Bash(chmod +x:*)",
-      "Bash(bash:*)",
-      "Bash(TESTCONTAINERS_RYUK_DISABLED=true bun test:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(bun check-types:*)",
-      "Bash(bun run:*)",
-      "Bash(git reset:*)",
-      "Bash(zsh -c 'source src/commands/oms-run-all/oms-run-all.sh && oms-run-all .=\"\"echo salut\"\" 2>&1')"
-    ]
-  },
-  "enabledPlugins": {
-    "claude-mem@thedotmack": true
-  }
+	"permissions": {
+		"allow": [
+			"WebSearch",
+			"Bash(bun install:*)",
+			"Bash(bun test:*)",
+			"Bash(docker:*)",
+			"WebFetch(domain:testcontainers.com)",
+			"WebFetch(domain:node.testcontainers.org)",
+			"Bash(sed:*)",
+			"Bash(chmod +x:*)",
+			"Bash(bash:*)",
+			"Bash(TESTCONTAINERS_RYUK_DISABLED=true bun test:*)",
+			"Bash(git add:*)",
+			"Bash(git commit:*)",
+			"Bash(bun check-types:*)",
+			"Bash(bun run:*)",
+			"Bash(git reset:*)",
+			"Bash(zsh -c 'source src/commands/oms-run-all/oms-run-all.sh && oms-run-all .=\"\"echo salut\"\" 2>&1')",
+			"Bash(zsh -c 'source /Users/arthur/Documents/Dev/projects/oh-my-skills/src/commands/oms-run-all/oms-run-all.sh && oms-run-all .=\"\"echo salut\"\" 2>&1')"
+		]
+	},
+	"enabledPlugins": {
+		"claude-mem@thedotmack": true
+	}
 }

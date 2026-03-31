@@ -2,330 +2,21 @@
 
 # ---------------------------------------------------------------------------
 # oms-run-all — run commands across multiple directories (parallel + pipeline)
+#
+# This file serves two roles:
+#   1. Sourced at shell startup → defines the `oms-run-all` wrapper + alias
+#   2. Executed with --exec     → runs the actual parallel command logic
 # ---------------------------------------------------------------------------
 
-# Colors
-__oms_ra_RED=$'\033[31m'
-__oms_ra_GREEN=$'\033[32m'
-__oms_ra_BLUE=$'\033[34m'
-__oms_ra_DIM=$'\033[2m'
-__oms_ra_RESET=$'\033[0m'
-__oms_ra_COLORS=(
-    $'\033[36m'   # cyan
-    $'\033[33m'   # yellow
-    $'\033[35m'   # magenta
-    $'\033[34m'   # blue
-    $'\033[32m'   # green
-    $'\033[91m'   # bright red
-)
+# ── Sourced mode: define wrapper and exit ──────────────────────────────────
 
-alias oms-ra='oms-run-all'
+if [[ "${1:-}" != "--exec" ]]; then
+    __OMS_RUN_ALL_SCRIPT="${BASH_SOURCE[0]:-${(%):-%x}}"
+    alias oms-ra='oms-run-all'
 
-# --- Internal helpers -------------------------------------------------------
-
-__oms_ra_clear_line() {
-    [[ "${__oms_ra_is_tty:-0}" -eq 0 ]] && return
-    printf '\r\033[K'
-}
-
-__oms_ra_sanitize() {
-    local path="$1"
-    if command -v realpath &>/dev/null && [[ -e "$path" ]]; then
-        path=$(realpath "$path")
-    fi
-    printf '%s' "$path" | tr '/' '_'
-}
-
-__oms_ra_print_status() {
-    local rc="$1" repo="$2"
-    if [[ "$rc" -eq 0 ]]; then
-        printf '  %s✓%s %s\n' "$__oms_ra_GREEN" "$__oms_ra_RESET" "$repo"
-    else
-        printf '  %s✗%s %s %s(exit %d)%s\n' "$__oms_ra_RED" "$__oms_ra_RESET" "$repo" "$__oms_ra_DIM" "$rc" "$__oms_ra_RESET"
-    fi
-}
-
-__oms_ra_print_error_block() {
-    local name="$1" file="$2"
-    printf '\n  %s┌─ %s ─────────────────────────────%s\n' "$__oms_ra_RED" "$name" "$__oms_ra_RESET"
-    while IFS= read -r line; do
-        printf '  %s│%s %s\n' "$__oms_ra_RED" "$__oms_ra_RESET" "$line"
-    done < "$file"
-    printf '  %s└──────────────────────────────────────%s\n' "$__oms_ra_RED" "$__oms_ra_RESET"
-}
-
-__oms_ra_print_spinner() {
-    [[ "${__oms_ra_is_tty:-0}" -eq 0 ]] && return
-    local frame="$1"; shift
-    local braille=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
-    local char="${braille[$((frame % ${#braille[@]}))]}"
-    local remaining="$*"
-    __oms_ra_clear_line
-    printf '  %s%s%s %s' "$__oms_ra_BLUE" "$char" "$__oms_ra_RESET" "$remaining"
-}
-
-__oms_ra_launch_one() {
-    local dir="$1" cmd="$2" tmpdir="$3"
-    local safe
-    safe=$(__oms_ra_sanitize "$dir")
-    (
-        # Write exit code on any exit (including `exit N` inside eval'd commands)
-        trap 'printf "%d" "$?" > "${tmpdir}/${safe}.rc"' EXIT
-        if [[ ! -d "$dir" ]]; then
-            printf 'directory not found: %s\n' "$dir" > "${tmpdir}/${safe}.out" 2>&1
-            exit 1
-        fi
-        cd "$dir" || {
-            printf 'cannot cd into: %s\n' "$dir" > "${tmpdir}/${safe}.out" 2>&1
-            exit 1
-        }
-        FORCE_COLOR=1 \
-        GIT_CONFIG_COUNT=1 \
-        GIT_CONFIG_KEY_0=color.ui \
-        GIT_CONFIG_VALUE_0=always \
-        eval "$cmd" > "${tmpdir}/${safe}.out" 2>&1
-    ) &
-}
-
-__oms_ra_wait_with_spinner() {
-    local tmpdir="$1"; shift
-    local total=$#
-    local frame=0
-
-    while true; do
-        local done_count=0
-        local remaining=""
-        for name in "$@"; do
-            local safe
-            safe=$(__oms_ra_sanitize "$name")
-            if [[ -f "${tmpdir}/${safe}.rc" ]]; then
-                done_count=$((done_count + 1))
-            else
-                [[ -n "$remaining" ]] && remaining="$remaining "
-                remaining="${remaining}${name}"
-            fi
-        done
-        if [[ $done_count -ge $total ]]; then
-            __oms_ra_clear_line
-            break
-        fi
-        __oms_ra_print_spinner "$frame" "$remaining"
-        frame=$((frame + 1))
-        sleep 0.1
-    done
-}
-
-__oms_ra_max_name_len() {
-    local max=0
-    for name in "$@"; do
-        local len=${#name}
-        [[ $len -gt "$max" ]] && max=$len
-    done
-    printf '%d' "$max"
-}
-
-# Parse step args into parallel positional params: n dir1 cmd1 dir2 cmd2 ...
-# Usage: set -- $(__oms_ra_parse_args "$@") doesn't work for spaces,
-# so we use a callback approach: parse into a temp file.
-__oms_ra_parse_args() {
-    local outfile="$1"; shift
-    local bare_cmd="" bare_dirs=""
-    local count=0
-
-    : > "$outfile"
-    for arg in "$@"; do
-        if [[ "$arg" == *=* ]]; then
-            printf '%s\n' "${arg%%=*}" >> "$outfile"
-            printf '%s\n' "${arg#*=}" >> "$outfile"
-            count=$((count + 1))
-        else
-            if [[ -z "$bare_cmd" ]]; then
-                bare_cmd="$arg"
-            else
-                bare_dirs="${bare_dirs}${bare_dirs:+$'\x1f'}${arg}"
-            fi
-        fi
-    done
-
-    # Convert bare args to pairs
-    if [[ -n "$bare_dirs" ]]; then
-        local old_ifs="$IFS"
-        IFS=$'\x1f'
-        for dir in $bare_dirs; do
-            printf '%s\n' "$dir" >> "$outfile"
-            printf '%s\n' "$bare_cmd" >> "$outfile"
-            count=$((count + 1))
-        done
-        IFS="$old_ifs"
-    fi
-
-    printf '%d' "$count"
-}
-
-__oms_ra_run_step() {
-    local tmpdir
-    tmpdir=$(mktemp -d)
-    trap 'rm -rf "$tmpdir" 2>/dev/null; kill 0 2>/dev/null; trap - INT TERM; return 130' INT TERM
-
-    local pairfile="$tmpdir/_pairs"
-    local count
-    count=$(__oms_ra_parse_args "$pairfile" "$@")
-
-    [[ "$count" -eq 0 ]] && { rm -rf "$tmpdir"; trap - INT TERM; return 0; }
-
-    # Read pairs from file into positional processing
-    local names="" cmds="" header_shown=""
-    local line_num=0
-    local cur_dir="" cur_cmd=""
-    while IFS= read -r line; do
-        if [[ $((line_num % 2)) -eq 0 ]]; then
-            cur_dir="$line"
-        else
-            cur_cmd="$line"
-            # Accumulate for display
-            names="${names}${names:+$'\x1f'}${cur_dir}"
-            cmds="${cmds}${cmds:+$'\x1f'}${cur_cmd}"
-            # Print header
-            printf '\n  %s▸%s %s %s→ %s%s\n' \
-                "$__oms_ra_BLUE" "$__oms_ra_RESET" \
-                "$cur_cmd" "$__oms_ra_DIM" "$cur_dir" "$__oms_ra_RESET"
-            # Launch job
-            __oms_ra_launch_one "$cur_dir" "$cur_cmd" "$tmpdir"
-        fi
-        line_num=$((line_num + 1))
-    done < "$pairfile"
-
-    # Build name list for spinner
-    local name_list=()
-    local old_ifs="$IFS"
-    IFS=$'\x1f'
-    for n in $names; do
-        name_list+=("$n")
-    done
-    IFS="$old_ifs"
-
-    # Wait with spinner
-    __oms_ra_wait_with_spinner "$tmpdir" "${name_list[@]}"
-
-    # Collect results
-    local step_failed=0
-    local failed_names=()
-    for name in "${name_list[@]}"; do
-        local safe
-        safe=$(__oms_ra_sanitize "$name")
-        local rc
-        rc=$(cat "${tmpdir}/${safe}.rc" 2>/dev/null || echo 1)
-        __oms_ra_print_status "$rc" "$name"
-        if [[ "$rc" -ne 0 ]]; then
-            step_failed=1
-            failed_names+=("$name")
-        fi
-    done
-
-    # Print error blocks for failures
-    for name in "${failed_names[@]}"; do
-        local safe
-        safe=$(__oms_ra_sanitize "$name")
-        if [[ -s "${tmpdir}/${safe}.out" ]]; then
-            __oms_ra_print_error_block "$name" "${tmpdir}/${safe}.out"
-        fi
-    done
-
-    rm -rf "$tmpdir"
-    trap - INT TERM
-    return $step_failed
-}
-
-__oms_ra_stream_one() {
-    local dir="$1" cmd="$2" color="$3" pad="$4"
-    local label
-    label=$(printf "%-${pad}s" "$dir")
-
-    if [[ ! -d "$dir" ]]; then
-        printf '%s%s%s │ %sdirectory not found: %s%s\n' \
-            "$color" "$label" "$__oms_ra_RESET" \
-            "$__oms_ra_RED" "$dir" "$__oms_ra_RESET"
-        return 1
-    fi
-
-    (
-        cd "$dir" || {
-            printf '%s%s%s │ %scannot cd into: %s%s\n' \
-                "$color" "$label" "$__oms_ra_RESET" \
-                "$__oms_ra_RED" "$dir" "$__oms_ra_RESET"
-            return 1
-        }
-        FORCE_COLOR=1 \
-        GIT_CONFIG_COUNT=1 \
-        GIT_CONFIG_KEY_0=color.ui \
-        GIT_CONFIG_VALUE_0=always \
-        eval "$cmd" 2>&1 | while IFS= read -r line; do
-            printf '%s%s%s │ %s\n' "$color" "$label" "$__oms_ra_RESET" "$line"
-        done
-    ) &
-}
-
-__oms_ra_run_stream() {
-    local tmpdir
-    tmpdir=$(mktemp -d)
-    local pairfile="$tmpdir/_pairs"
-    local count
-    count=$(__oms_ra_parse_args "$pairfile" "$@")
-
-    [[ "$count" -eq 0 ]] && { rm -rf "$tmpdir"; return 0; }
-
-    # Read pairs and collect names/cmds
-    local all_names=() all_cmds=()
-    local line_num=0 cur_dir=""
-    while IFS= read -r line; do
-        if [[ $((line_num % 2)) -eq 0 ]]; then
-            cur_dir="$line"
-        else
-            all_names+=("$cur_dir")
-            all_cmds+=("$line")
-        fi
-        line_num=$((line_num + 1))
-    done < "$pairfile"
-    rm -rf "$tmpdir"
-
-    local pad
-    pad=$(__oms_ra_max_name_len "${all_names[@]}")
-
-    # Header
-    printf '\n  %s▸ stream mode%s\n' "$__oms_ra_BLUE" "$__oms_ra_RESET"
-    local ci=0
-    for ((ci=0; ci<${#all_names[@]}; ci++)); do
-        local color_idx=$((ci % ${#__oms_ra_COLORS[@]}))
-        printf '    %s%s%s → %s\n' \
-            "${__oms_ra_COLORS[$color_idx]}" "${all_names[$ci]}" "$__oms_ra_RESET" "${all_cmds[$ci]}"
-    done
-    printf '\n'
-
-    # Launch streams
-    local pids=()
-    for ((ci=0; ci<${#all_names[@]}; ci++)); do
-        local color_idx=$((ci % ${#__oms_ra_COLORS[@]}))
-        __oms_ra_stream_one "${all_names[$ci]}" "${all_cmds[$ci]}" "${__oms_ra_COLORS[$color_idx]}" "$pad"
-        pids+=($!)
-    done
-
-    # Ctrl+C handler
-    trap 'for p in "${pids[@]}"; do kill "$p" 2>/dev/null; done; return 130' INT
-
-    # Wait for all children
-    for pid in "${pids[@]}"; do
-        wait "$pid" 2>/dev/null
-    done
-
-    trap - INT
-    return 0
-}
-
-# --- Main entry point -------------------------------------------------------
-
-oms-run-all() {
-    if [[ $# -eq 0 || "$1" == "--help" || "$1" == "-h" ]]; then
-        cat <<'EOF'
+    oms-run-all() {
+        if [[ $# -eq 0 || "$1" == "--help" || "$1" == "-h" ]]; then
+            cat <<'EOF'
 Usage: oms-run-all [dir=command ...] [command dir ...] [--then ...] [--stream ...]
 
 Run commands across multiple directories in parallel.
@@ -348,54 +39,311 @@ Examples:
 
 Alias: oms-ra
 EOF
-        return 0
+            return 0
+        fi
+        bash "$__OMS_RUN_ALL_SCRIPT" --exec "$@"
+    }
+
+    return 0 2>/dev/null || exit 0
+fi
+
+# ── Executed mode: parallel command runner ─────────────────────────────────
+
+shift # remove --exec
+set -euo pipefail
+
+# ── Colors ────────────────────────────────────────────────────────────────
+
+RED=$'\033[31m'
+GREEN=$'\033[32m'
+BLUE=$'\033[34m'
+DIM=$'\033[2m'
+RESET=$'\033[0m'
+STREAM_COLORS=(
+    $'\033[36m'   # cyan
+    $'\033[33m'   # yellow
+    $'\033[35m'   # magenta
+    $'\033[34m'   # blue
+    $'\033[32m'   # green
+    $'\033[91m'   # bright red
+)
+
+IS_TTY=0
+[[ -t 1 ]] && IS_TTY=1
+
+# ── Utilities ─────────────────────────────────────────────────────────────
+
+# Replace / with _ in a path for use as a temp file key.
+# Uses realpath when available to normalize ./dir and dir.
+sanitize() {
+    local p="$1"
+    if command -v realpath &>/dev/null && [[ -e "$p" ]]; then
+        p=$(realpath "$p")
+    fi
+    printf '%s' "${p//\//_}"
+}
+
+# Print ✓ or ✗ for a completed job.
+print_status() {
+    local rc="$1" name="$2"
+    if [[ "$rc" -eq 0 ]]; then
+        printf '  %s✓%s %s\n' "$GREEN" "$RESET" "$name"
+    else
+        printf '  %s✗%s %s %s(exit %d)%s\n' "$RED" "$RESET" "$name" "$DIM" "$rc" "$RESET"
+    fi
+}
+
+# Print a framed error block from a log file.
+print_error_block() {
+    local name="$1" file="$2"
+    printf '\n  %s┌─ %s ─────────────────────────────%s\n' "$RED" "$name" "$RESET"
+    while IFS= read -r line; do
+        printf '  %s│%s %s\n' "$RED" "$RESET" "$line"
+    done < "$file"
+    printf '  %s└──────────────────────────────────────%s\n' "$RED" "$RESET"
+}
+
+# Clear the current line (TTY only).
+clear_line() {
+    [[ "$IS_TTY" -eq 0 ]] && return
+    printf '\r\033[K'
+}
+
+# Show a braille spinner with the names of remaining jobs.
+print_spinner() {
+    [[ "$IS_TTY" -eq 0 ]] && return
+    local frame="$1"; shift
+    local braille=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    local char="${braille[$((frame % ${#braille[@]}))]}"
+    clear_line
+    printf '  %s%s%s %s' "$BLUE" "$char" "$RESET" "$*"
+}
+
+# Return the length of the longest string in the arguments.
+max_name_len() {
+    local max=0
+    for name in "$@"; do
+        [[ ${#name} -gt $max ]] && max=${#name}
+    done
+    printf '%d' "$max"
+}
+
+# ── Argument parsing ──────────────────────────────────────────────────────
+
+# Parse step arguments into two parallel arrays: _dirs and _cmds.
+# Supports both mapping (dir=cmd) and uniform (cmd dir1 dir2) syntax.
+# Results are written to the caller's arrays via nameref.
+parse_step_args() {
+    local -n _dirs=$1 _cmds=$2
+    shift 2
+    local bare_cmd="" arg
+
+    for arg in "$@"; do
+        if [[ "$arg" == *=* ]]; then
+            _dirs+=("${arg%%=*}")
+            _cmds+=("${arg#*=}")
+        elif [[ -z "$bare_cmd" ]]; then
+            bare_cmd="$arg"
+        else
+            _dirs+=("$arg")
+            _cmds+=("$bare_cmd")
+        fi
+    done
+}
+
+# ── Batch mode ────────────────────────────────────────────────────────────
+
+# Launch a single job in the background.
+# Writes stdout/stderr to $tmpdir/<key>.out and exit code to $tmpdir/<key>.rc.
+launch_one() {
+    local dir="$1" cmd="$2" tmpdir="$3"
+    local key
+    key=$(sanitize "$dir")
+    (
+        trap 'printf "%d" "$?" > "${tmpdir}/${key}.rc"' EXIT
+        if [[ ! -d "$dir" ]]; then
+            printf 'directory not found: %s\n' "$dir" > "${tmpdir}/${key}.out"
+            exit 1
+        fi
+        cd "$dir" || exit 1
+        FORCE_COLOR=1 \
+        GIT_CONFIG_COUNT=1 \
+        GIT_CONFIG_KEY_0=color.ui \
+        GIT_CONFIG_VALUE_0=always \
+        eval "$cmd" > "${tmpdir}/${key}.out" 2>&1
+    ) &
+}
+
+# Poll for completed jobs, showing a spinner until all are done.
+wait_with_spinner() {
+    local tmpdir="$1"; shift
+    local total=$#
+    local frame=0
+
+    while true; do
+        local done_count=0
+        local remaining=""
+        for name in "$@"; do
+            if [[ -f "${tmpdir}/$(sanitize "$name").rc" ]]; then
+                done_count=$((done_count + 1))
+            else
+                [[ -n "$remaining" ]] && remaining="$remaining "
+                remaining="${remaining}${name}"
+            fi
+        done
+        if [[ $done_count -ge $total ]]; then
+            clear_line
+            break
+        fi
+        print_spinner "$frame" "$remaining"
+        frame=$((frame + 1))
+        sleep 0.1
+    done
+}
+
+# Run a batch step: launch all jobs in parallel, wait, print results.
+run_step() {
+    local dirs=() cmds=()
+    parse_step_args dirs cmds "$@"
+
+    [[ ${#dirs[@]} -eq 0 ]] && return 0
+
+    local tmpdir
+    tmpdir=$(mktemp -d)
+    trap 'rm -rf "$tmpdir" 2>/dev/null; trap - INT TERM' INT TERM
+
+    # Print headers and launch jobs
+    for ((i=0; i<${#dirs[@]}; i++)); do
+        printf '\n  %s▸%s %s %s→ %s%s\n' \
+            "$BLUE" "$RESET" "${cmds[$i]}" "$DIM" "${dirs[$i]}" "$RESET"
+        launch_one "${dirs[$i]}" "${cmds[$i]}" "$tmpdir"
+    done
+
+    wait_with_spinner "$tmpdir" "${dirs[@]}"
+
+    # Collect results
+    local step_failed=0
+    local failed=()
+    for name in "${dirs[@]}"; do
+        local rc
+        rc=$(cat "${tmpdir}/$(sanitize "$name").rc" 2>/dev/null || echo 1)
+        print_status "$rc" "$name"
+        if [[ "$rc" -ne 0 ]]; then
+            step_failed=1
+            failed+=("$name")
+        fi
+    done
+
+    # Show error output for failed jobs
+    for name in "${failed[@]}"; do
+        local outfile="${tmpdir}/$(sanitize "$name").out"
+        [[ -s "$outfile" ]] && print_error_block "$name" "$outfile"
+    done
+
+    rm -rf "$tmpdir"
+    trap - INT TERM
+    return "$step_failed"
+}
+
+# ── Stream mode ───────────────────────────────────────────────────────────
+
+# Launch a single streaming process with color-prefixed live output.
+stream_one() {
+    local dir="$1" cmd="$2" color="$3" pad="$4"
+    local label
+    label=$(printf "%-${pad}s" "$dir")
+
+    if [[ ! -d "$dir" ]]; then
+        printf '%s%s%s │ %sdirectory not found: %s%s\n' \
+            "$color" "$label" "$RESET" "$RED" "$dir" "$RESET"
+        return 1
     fi
 
-    # zsh compat: 0-based array indexing
-    [[ -n "$ZSH_VERSION" ]] && setopt local_options KSH_ARRAYS
+    (
+        cd "$dir" || return 1
+        FORCE_COLOR=1 \
+        GIT_CONFIG_COUNT=1 \
+        GIT_CONFIG_KEY_0=color.ui \
+        GIT_CONFIG_VALUE_0=always \
+        eval "$cmd" 2>&1 | while IFS= read -r line; do
+            printf '%s%s%s │ %s\n' "$color" "$label" "$RESET" "$line"
+        done
+    ) &
+}
 
-    local __oms_ra_is_tty=0
-    [[ -t 1 ]] && __oms_ra_is_tty=1
+# Run a stream step: launch all jobs with live prefixed output, wait for completion.
+run_stream() {
+    local dirs=() cmds=()
+    parse_step_args dirs cmds "$@"
 
-    local __oms_ra_exit_code=0
-    local current_mode="batch"
-    local current_args=()
+    [[ ${#dirs[@]} -eq 0 ]] && return 0
+
+    local pad
+    pad=$(max_name_len "${dirs[@]}")
+
+    # Header
+    printf '\n  %s▸ stream mode%s\n' "$BLUE" "$RESET"
+    for ((i=0; i<${#dirs[@]}; i++)); do
+        local ci=$((i % ${#STREAM_COLORS[@]}))
+        printf '    %s%s%s → %s\n' \
+            "${STREAM_COLORS[$ci]}" "${dirs[$i]}" "$RESET" "${cmds[$i]}"
+    done
+    printf '\n'
+
+    # Launch
+    local pids=()
+    for ((i=0; i<${#dirs[@]}; i++)); do
+        local ci=$((i % ${#STREAM_COLORS[@]}))
+        stream_one "${dirs[$i]}" "${cmds[$i]}" "${STREAM_COLORS[$ci]}" "$pad"
+        pids+=($!)
+    done
+
+    # Ctrl+C: kill children and exit
+    trap 'for p in "${pids[@]}"; do kill "$p" 2>/dev/null; done; exit 130' INT
+
+    for pid in "${pids[@]}"; do
+        wait "$pid" 2>/dev/null || true
+    done
+
+    trap - INT
+}
+
+# ── Pipeline orchestrator ─────────────────────────────────────────────────
+
+# Dispatch a step to the right runner and track exit code.
+dispatch_step() {
+    local mode="$1"; shift
+    if [[ "$mode" == "stream" ]]; then
+        run_stream "$@"
+    else
+        run_step "$@" || EXIT_CODE=$?
+    fi
+}
+
+# Main: split arguments into steps at --then/--stream boundaries,
+# then execute each step sequentially.
+main() {
+    EXIT_CODE=0
+    local mode="batch"
+    local args=()
 
     for arg in "$@"; do
         case "$arg" in
             --then|--stream)
-                if [[ ${#current_args[@]} -gt 0 ]]; then
-                    if [[ "$current_mode" == "stream" ]]; then
-                        __oms_ra_run_stream "${current_args[@]}"
-                        local rc=$?
-                        [[ $rc -ne 0 ]] && __oms_ra_exit_code=$rc
-                    else
-                        __oms_ra_run_step "${current_args[@]}"
-                        local rc=$?
-                        [[ $rc -ne 0 ]] && __oms_ra_exit_code=$rc
-                    fi
-                    current_args=()
-                fi
-                [[ "$arg" == "--stream" ]] && current_mode="stream" || current_mode="batch"
+                [[ ${#args[@]} -gt 0 ]] && dispatch_step "$mode" "${args[@]}"
+                args=()
+                [[ "$arg" == "--stream" ]] && mode="stream" || mode="batch"
                 ;;
             *)
-                current_args+=("$arg")
+                args+=("$arg")
                 ;;
         esac
     done
 
     # Flush last step
-    if [[ ${#current_args[@]} -gt 0 ]]; then
-        if [[ "$current_mode" == "stream" ]]; then
-            __oms_ra_run_stream "${current_args[@]}"
-            local rc=$?
-            [[ $rc -ne 0 ]] && __oms_ra_exit_code=$rc
-        else
-            __oms_ra_run_step "${current_args[@]}"
-            local rc=$?
-            [[ $rc -ne 0 ]] && __oms_ra_exit_code=$rc
-        fi
-    fi
+    [[ ${#args[@]} -gt 0 ]] && dispatch_step "$mode" "${args[@]}"
 
-    return $__oms_ra_exit_code
+    exit "$EXIT_CODE"
 }
+
+main "$@"
