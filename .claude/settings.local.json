@@ -17,7 +17,9 @@
 			"Bash(bun run:*)",
 			"Bash(git reset:*)",
 			"Bash(zsh -c 'source src/commands/oms-run-all/oms-run-all.sh && oms-run-all .=\"\"echo salut\"\" 2>&1')",
-			"Bash(zsh -c 'source /Users/arthur/Documents/Dev/projects/oh-my-skills/src/commands/oms-run-all/oms-run-all.sh && oms-run-all .=\"\"echo salut\"\" 2>&1')"
+			"Bash(zsh -c 'source /Users/arthur/Documents/Dev/projects/oh-my-skills/src/commands/oms-run-all/oms-run-all.sh && oms-run-all .=\"\"echo salut\"\" 2>&1')",
+			"Bash(gh auth:*)",
+			"Bash(git remote:*)"
 		]
 	},
 	"enabledPlugins": {

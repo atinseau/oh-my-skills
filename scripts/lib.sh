@@ -263,9 +263,17 @@ install_skills() {
         local skill_name
         skill_name=$(basename "$skill_dir")
 
-        # 1. Copy canonical skill to ~/.oh-my-skills/skills/<name>.md
-        local canonical_path="$SKILLS_DIR/$skill_name.md"
+        # 1. Copy canonical skill directory to ~/.oh-my-skills/skills/<name>/
+        local canonical_dir="$SKILLS_DIR/$skill_name"
+        local canonical_path="$canonical_dir/SKILL.md"
+        mkdir -p "$canonical_dir"
         cp "$skill_dir/SKILL.md" "$canonical_path"
+        # Copy references/ and other subdirectories if present
+        for subdir in "$skill_dir"/*/; do
+            if [[ -d "$subdir" ]]; then
+                cp -r "$subdir" "$canonical_dir/"
+            fi
+        done
         log_success "Installed canonical skill '${CYAN}$skill_name${NC}'"
 
         # Extract frontmatter for wrapper generation

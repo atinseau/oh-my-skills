@@ -270,12 +270,12 @@ describe("lib.sh unit tests", () => {
 
 			const skill = exec(
 				id,
-				`test -f ${INSTALL}/skills/hello-skill.md && echo ok`,
+				`test -f ${INSTALL}/skills/hello-skill/SKILL.md && echo ok`,
 			);
 			expect(skill.output).toBe("ok");
 
 			// Canonical file should contain the original SKILL.md content
-			const content = exec(id, `cat ${INSTALL}/skills/hello-skill.md`);
+			const content = exec(id, `cat ${INSTALL}/skills/hello-skill/SKILL.md`);
 			expect(content.output).toContain("by: oh-my-skills");
 		});
 
@@ -294,7 +294,9 @@ describe("lib.sh unit tests", () => {
 				id,
 				`cat ${HOME}/.claude/skills/hello-skill/SKILL.md`,
 			);
-			expect(content.output).toContain("oh-my-skills/skills/hello-skill.md");
+			expect(content.output).toContain(
+				"oh-my-skills/skills/hello-skill/SKILL.md",
+			);
 			expect(content.output).toContain("$ARGUMENTS");
 
 			const r = exec(id, `cat ${INSTALL}/registry.json`);
@@ -318,7 +320,9 @@ describe("lib.sh unit tests", () => {
 				`cat ${HOME}/.copilot/skills/hello-skill.prompt.md`,
 			);
 			expect(content.output).toContain('mode: "agent"');
-			expect(content.output).toContain("oh-my-skills/skills/hello-skill.md");
+			expect(content.output).toContain(
+				"oh-my-skills/skills/hello-skill/SKILL.md",
+			);
 
 			const r = exec(id, `cat ${INSTALL}/registry.json`);
 			const registry = JSON.parse(r.output);
@@ -341,7 +345,7 @@ describe("lib.sh unit tests", () => {
 			// Canonical skill should still be installed
 			const canonical = exec(
 				id,
-				`test -f ${INSTALL}/skills/hello-skill.md && echo ok`,
+				`test -f ${INSTALL}/skills/hello-skill/SKILL.md && echo ok`,
 			);
 			expect(canonical.output).toBe("ok");
 
