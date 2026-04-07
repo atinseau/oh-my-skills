@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-oh-my-skills is a community registry for sharing bash commands/aliases and LLM skills (Claude, Copilot). Users install via a one-liner that clones the repo to `~/.oh-my-skills`, copies skills to the right LLM directories, and sources commands into the user's shell.
+oh-my-skills is the "oh-my-zsh" of AI agents — a community ecosystem for sharing and installing LLM skills (Claude, Copilot) and shell commands. One-liner install: clones the repo to `~/.oh-my-skills`, copies skills to the right LLM directories, and sources commands into the user's shell.
 
 ## Commands
 
@@ -32,16 +32,13 @@ TESTCONTAINERS_RYUK_DISABLED=true bun test tests/install.test.ts
 
 ### Scripts (`scripts/`)
 
-- **`lib.sh`** — Shared library sourced by all three lifecycle scripts. Contains: colors/log helpers, `confirm()`, `detect_shell()`, `detect_llms()`, `get_version()`, `init_registry()`, `extract_frontmatter()`, `generate_claude_wrapper()`, `generate_copilot_wrapper()`, `install_skills()`, `install_commands()`, `create_shell_sourcing(mode)`, `inject_sourcing(shell, mode)`. The `mode` parameter (`"install"` or `"update"`) controls log messages (e.g. "created" vs "updated") and suppresses redundant warnings in update context.
-- **`install.sh`** — Clones repo to `~/.oh-my-skills`, then calls lib functions to detect CLIs, install canonical skills + LLM wrappers, copy commands, create shell sourcing, and inject the `source` line into `.bashrc`/`.zshrc`. Writes `registry.json`.
-- **`uninstall.sh`** — Reads `registry.json` to find and remove LLM wrapper files (verified by checking that the wrapper references `oh-my-skills/skills/`), removes the sourcing line from shell config, deletes `~/.oh-my-skills/`. Accepts `--yes` / `-y` to skip the interactive confirmation prompt (required when running via `curl | bash` since stdin is not a terminal).
-- **`update.sh`** — Supports three modes: `--manual` (synchronous network check with full UI), `--auto-check` (cache-first zero-latency check at shell startup), and `--background-fetch` (silent network fetch that only writes the cache). Uses a cache file (`~/.oh-my-skills/.update-cache`) with a configurable TTL (`OMS_UPDATE_CACHE_TTL` env var, default 24h/86400s) to avoid blocking shell startup with network calls. When the cache is stale or missing, `--auto-check` spawns a detached `--background-fetch` process and returns immediately; the user sees the update notification on the *next* shell open once the cache is populated. Manual mode always does a synchronous fetch and also writes the cache. After a successful update, the cache is invalidated so the next auto-check re-fetches cleanly. Asks for explicit confirmation when an update is available, then calls lib functions directly (not `install.sh`) to update skills/commands/shell in update context, and prints commit titles since the previous release as the changelog.
+4 lifecycle scripts: `install.sh`, `uninstall.sh`, `update.sh` + `lib.sh` (shared library). All scripts source `lib.sh`.
 
-### Skill installation pattern (`.agent/skills` — Single Source, Multiple Consumers)
+### Skill installation pattern — Single Source, Multiple Consumers
 
 Skills follow a **single source of truth** pattern to avoid drift across LLM tools:
 
-1. **Canonical skill** — `~/.oh-my-skills/skills/<name>.md` contains 100% of the intelligence (copied from `src/skills/<name>/SKILL.md`). This is the only file that carries logic.
+1. **Canonical skill** — `~/.oh-my-skills/skills/<name>/` directory (copied from `src/skills/<name>/`). Entry point is always `SKILL.md`; skills may include subdirectories (e.g. `references/`).
 2. **LLM wrappers** — Lightweight files (2–8 lines) that redirect to the canonical skill:
    - **Claude**: `~/.claude/skills/<name>/SKILL.md` — contains `Follow the instructions in <canonical-path>` + `$ARGUMENTS`
    - **Copilot**: `~/.copilot/skills/<name>.prompt.md` — contains YAML frontmatter (`mode`, `description`) + a link to the canonical skill
@@ -49,43 +46,107 @@ Skills follow a **single source of truth** pattern to avoid drift across LLM too
 
 ### Registry (`~/.oh-my-skills/registry.json`)
 
-```json
-{"version":"0.1.0","skills":{"claude":["/root/.claude/skills/git-pr-flow/SKILL.md"],"copilot":["/root/.copilot/skills/git-pr-flow.prompt.md"]}}
-```
-
-The registry tracks the paths of **LLM wrapper files** (not directories). Uninstall uses the registry to locate wrappers and verifies ownership by checking that each wrapper references `oh-my-skills/skills/` before deleting it. For Claude wrappers (which live in subdirectories), the parent directory is also removed if empty after deletion. Canonical skills live in `~/.oh-my-skills/skills/` and are cleaned up automatically when `~/.oh-my-skills/` is removed. Commands live in `~/.oh-my-skills/commands/` and are recursively sourced via `~/.oh-my-skills/shell`.
+Tracks installed **LLM wrapper file** paths. Uninstall verifies ownership by checking that each wrapper references `oh-my-skills/skills/` before deleting it. Example: `{"version":"0.1.0","skills":{"claude":["/root/.claude/skills/git-pr-flow/SKILL.md"],"copilot":[...]}}`
 
 ### Source content (`src/`)
 
-- `src/skills/` — Skill directories, each containing a `SKILL.md` with YAML frontmatter (`name`, `description`, `by: oh-my-skills`). At install time, the `SKILL.md` is copied as the canonical skill and LLM-specific wrappers are generated from its frontmatter.
-- `src/commands/` — Shell scripts (`.sh`) defining aliases/functions. Two layouts are supported: flat (`commands/name.sh`) or nested (`commands/name/name.sh`). The nested layout allows co-locating tests and helper files alongside the command. Only `*.sh` files are copied to `~/.oh-my-skills/commands/` during installation; non-shell files (tests, READMEs, etc.) are excluded.
+- `src/skills/` — Skill directories, each containing a `SKILL.md` with YAML frontmatter and optional subdirectories.
+- `src/commands/` — Shell scripts (`.sh`) defining aliases/functions.
 
 ### Tests (`tests/`)
 
-All tests run inside Alpine Docker containers via **testcontainers**. The real scripts are copied into each container using `docker cp`, a local git repo simulates the remote, and fake `claude`/`copilot` binaries are created for LLM detection.
+Integration tests in Alpine Docker containers via testcontainers. Lifecycle scripts tested end-to-end, commands tested with co-located unit tests.
 
-Lifecycle script tests live in `tests/`:
-- `helpers.ts` — `exec()` wrapper (uses `docker exec` directly since testcontainers' `.exec()` hangs in bun), `copyToContainer()`, shared constants
-- `install.test.ts` — Runs real `install.sh` in container, verifies all artifacts
-- `uninstall.test.ts` — Installs first, then runs real `uninstall.sh`, checks cleanup + preservation of foreign skills
-- `update.test.ts` — Tests version comparison, no-op when up-to-date, cache lifecycle (write after manual check, fresh cache auto-check, stale cache triggers background fetch, background-fetch populates cache, cache invalidation after update), TTL override via `OMS_UPDATE_CACHE_TTL`, and update detection with new git tags
+## Contributing: Writing a Skill
 
-Command tests are co-located with their source in `src/commands/<name>/<name>.test.ts`:
-- `src/commands/oms-cli/oms-cli.test.ts` — Tests the `oms` CLI command (help, update delegation, unknown subcommands)
-- `src/commands/oms-git-diff/oms-git-diff.test.ts` — Tests the `oms-git-diff` command with a multi-branch git topology (feature branches, integration branches, staged/unstaged changes, edge cases)
+**Required structure:**
+```
+src/skills/<name>/
+├── SKILL.md          # Entry point (required)
+└── references/       # Optional subdirectory referenced by SKILL.md
+```
 
-### Key conventions
+**Required frontmatter in SKILL.md:**
+```yaml
+---
+name: <skill-name>
+description: <one-line description>
+by: oh-my-skills
+---
+```
 
-- Every skill MUST have `by: oh-my-skills` in its SKILL.md frontmatter — this marker is preserved in the canonical copy; uninstall identifies wrapper files by checking they reference `oh-my-skills/skills/`
-- Skills MUST be cross-LLM compatible (Claude Code + GitHub Copilot): use only standard SKILL.md frontmatter fields (`name`, `description`, `by`); avoid Claude Code-specific fields (`disable-model-invocation`, `user-invocable`, `allowed-tools`, `context`) unless they have a functional equivalent; never use Claude Code-only syntax like `!`command`` for dynamic context injection — instead, write explicit instructions telling the agent to run those commands
-- `package.json` version is the release source of truth used by installer logic and tests
+**Rules:**
+- `by: oh-my-skills` is required — ownership marker used by uninstall
+- Cross-LLM compatible: only standard frontmatter fields (`name`, `description`, `by`). No Claude Code-specific fields (`disable-model-invocation`, `user-invocable`, `allowed-tools`, `context`)
+- No Claude Code-only syntax like `` !`command` `` — write explicit instructions for the agent to run commands
+- Skills are not unit tested — quality relies on SKILL.md content
+
+## Contributing: Writing a Command
+
+**Two supported layouts:**
+```
+# Flat (simple command)
+src/commands/my-cmd.sh
+
+# Nested (command + co-located tests)
+src/commands/my-cmd/
+├── my-cmd.sh
+├── my-cmd.test.ts
+└── ...
+```
+
+**Rules:**
+- Only `*.sh` files are copied at install — non-shell files (tests, README) stay in repo
+- Use nested layout when a command has tests
+- Commands define shell aliases/functions sourced via `~/.oh-my-skills/shell`
+
+## Contributing: Writing Tests
+
+**What is tested and how:**
+
+| What | Where | How |
+|---|---|---|
+| Lifecycle scripts (install, uninstall, update) | `tests/*.test.ts` | End-to-end integration in Alpine Docker containers |
+| Shell commands | `src/commands/<name>/<name>.test.ts` | Co-located tests, same Docker infra |
+| Skills | Not tested | Quality relies on SKILL.md content |
+
+**Test infrastructure:**
+- All tests run in Alpine containers via **testcontainers** (Docker required)
+- Real scripts copied into container via `docker cp`
+- Local git repo simulates the remote
+- Fake `claude`/`copilot` binaries created for LLM detection
+- `helpers.ts` provides `exec()` (wrapper around `docker exec` — testcontainers native `.exec()` hangs in bun) and `copyToContainer()`
+
+**Pattern for a new command test:**
+- Create `src/commands/<name>/<name>.test.ts`
+- Follow existing test patterns: setup container, copy scripts, execute, assert on stdout/files
+
+## Contributing: Lifecycle Script Tests
+
+**Coverage by file:**
+- `install.test.ts` — Runs real `install.sh` in container, verifies all produced artifacts (canonical skills, LLM wrappers, registry, shell sourcing)
+- `uninstall.test.ts` — Installs first, then runs `uninstall.sh`, verifies complete cleanup + preservation of foreign (non-oh-my-skills) skills
+- `update.test.ts` — Version comparison, no-op when up-to-date, cache lifecycle (write, read, invalidation, TTL), update detection via git tags
+- `lib.test.ts` — Unit tests for shared library functions
+
+**When to write/modify these tests:**
+- Any behavior change in lifecycle scripts must be reflected in tests
+- New script or function in `lib.sh` → add tests in `lib.test.ts`
+- Change to install/uninstall/update flow → update corresponding test file
+
+## Release Workflow
+
+- **Source of truth:** version in `package.json`
+- Release triggered by pushing a `v*` tag — `release.yml` bumps `package.json`, creates GitHub Release, restores canary installer mode (`DEFAULT_TAG` mechanism)
+- Installer and tests use `package.json` version
+- `update.sh` compares git tags to detect new versions, displays commit titles as changelog
+- **GitHub workflows (`.github/workflows/`):** `pr-checks.yml` (PR checks), `release.yml` (release publishing)
+
+## Conventions
+
 - Scripts use `jq` when available, with `sed`/`grep` fallbacks for systems without it
-- Reinstall is expected to be idempotent and must not duplicate shell sourcing lines
-- The shell bootstrap should stay quiet when auto-check finds no update; if the user declines an update, they can trigger it later with `oms update`
-
-
-### Guidelines
-
-- When a contribution is made, ensure claude.md are updated with any relevant information about new commands, architectural changes, or conventions, only updating the relevant sections and only if necessary
-
-- If a critical behavior is added or changed, it should be reflected in the tests
+- Reinstall must be idempotent — no duplicated shell sourcing lines
+- Shell bootstrap stays quiet when auto-check finds no update; if the user declines an update, they can trigger it later with `oms update`
+- Pre-commit hooks managed by **lefthook** (`lefthook.yml`) — runs type-check, biome lint/format, bash syntax validation, and tests
+- When contributing, update CLAUDE.md if relevant (affected sections only)
+- Any critical behavior change must be reflected in tests
