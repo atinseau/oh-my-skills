@@ -109,7 +109,7 @@ describe("oh-my-skills Uninstall (real script)", () => {
 		// Canonical skill should exist
 		const canonical = exec(
 			id,
-			`test -f ${INSTALL}/skills/test-skill.md && echo ok`,
+			`test -f ${INSTALL}/skills/test-skill/SKILL.md && echo ok`,
 		);
 		expect(canonical.output).toBe("ok");
 	});
