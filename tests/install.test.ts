@@ -86,12 +86,12 @@ describe("oh-my-skills install.sh (e2e)", () => {
 	it("should install canonical skill to ~/.oh-my-skills/skills/", () => {
 		const r = exec(
 			id,
-			`test -f ${INSTALL}/skills/greeting-skill.md && echo ok`,
+			`test -f ${INSTALL}/skills/greeting-skill/SKILL.md && echo ok`,
 		);
 		expect(r.output).toBe("ok");
 
 		// Canonical file should contain the original SKILL.md content
-		const content = exec(id, `cat ${INSTALL}/skills/greeting-skill.md`);
+		const content = exec(id, `cat ${INSTALL}/skills/greeting-skill/SKILL.md`);
 		expect(content.output).toContain("by: oh-my-skills");
 		expect(content.output).toContain("Say hello nicely.");
 	});
@@ -107,7 +107,9 @@ describe("oh-my-skills install.sh (e2e)", () => {
 			id,
 			`cat ${HOME}/.claude/skills/greeting-skill/SKILL.md`,
 		);
-		expect(content.output).toContain("oh-my-skills/skills/greeting-skill.md");
+		expect(content.output).toContain(
+			"oh-my-skills/skills/greeting-skill/SKILL.md",
+		);
 		expect(content.output).toContain("$ARGUMENTS");
 		// Wrapper should NOT contain the full skill content
 		expect(content.output).not.toContain("Say hello nicely.");
