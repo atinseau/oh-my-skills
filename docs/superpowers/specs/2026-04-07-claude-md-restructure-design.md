@@ -10,11 +10,11 @@ Restructure as a single dense CLAUDE.md (approach C). Trim implementation detail
 
 ## Structure
 
-### 1. Vision & Objectif (new)
+### 1. Vision & Objective (new)
 
 oh-my-skills is the "oh-my-zsh" of AI agents — a community ecosystem for sharing and installing LLM skills (Claude, Copilot) and shell commands. One-liner install: clones repo to `~/.oh-my-skills`, copies skills to the right LLM directories, sources commands into the user's shell.
 
-### 2. Commandes (unchanged)
+### 2. Commands (unchanged)
 
 Keep the existing quick reference block as-is:
 - `bun install`, `bun check-types`, `bun run check`
@@ -27,7 +27,7 @@ Replace detailed per-function/per-mode descriptions with a structural overview:
 
 - **Scripts (`scripts/`)** — 4 lifecycle scripts: `install.sh`, `uninstall.sh`, `update.sh` + `lib.sh` (shared library). All scripts source `lib.sh`.
 - **Skill installation pattern** — Single source of truth: canonical skill in `~/.oh-my-skills/skills/<name>/` (copied from `src/skills/<name>/`), LLM wrappers in `~/.claude/skills/` and `~/.copilot/skills/` redirect to canonical. Adding a new LLM = new wrapper format, zero logic duplication.
-- **Registry (`~/.oh-my-skills/registry.json`)** — Tracks installed LLM wrapper paths. Uninstall verifies ownership before deletion.
+- **Registry (`~/.oh-my-skills/registry.json`)** — Tracks installed LLM wrapper paths. Uninstall verifies ownership before deletion. Example: `{"version":"0.1.0","skills":{"claude":["/root/.claude/skills/git-pr-flow/SKILL.md"],"copilot":[...]}}`
 - **Source content (`src/`)** — `src/skills/` for skills, `src/commands/` for shell commands.
 - **Tests (`tests/`)** — Integration tests in Alpine Docker containers via testcontainers. Lifecycle scripts tested end-to-end, commands tested with co-located unit tests.
 
@@ -117,7 +117,7 @@ src/commands/my-cmd/
 ### 8. Release Workflow
 
 - **Source of truth:** version in `package.json`
-- Git tags created via GitHub workflow `release.yml`
+- Release triggered by pushing a `v*` tag — `release.yml` bumps `package.json`, creates GitHub Release, restores canary installer mode (`DEFAULT_TAG` mechanism)
 - Installer and tests use `package.json` version
 - `update.sh` compares git tags to detect new versions, displays commit titles as changelog
 - **GitHub workflows (`.github/workflows/`):** `pr-checks.yml` (PR checks), `release.yml` (release publishing)
@@ -126,6 +126,7 @@ src/commands/my-cmd/
 
 - Scripts use `jq` when available, with `sed`/`grep` fallbacks
 - Reinstall must be idempotent — no duplicated shell sourcing lines
-- Shell bootstrap stays quiet when auto-check finds no update
+- Shell bootstrap stays quiet when auto-check finds no update; if the user declines an update, they can trigger it later with `oms update`
+- Pre-commit hooks managed by **lefthook** (`lefthook.yml`) — runs type-check, biome lint/format, bash syntax validation, and tests
 - When contributing, update CLAUDE.md if relevant (affected sections only)
 - Any critical behavior change must be reflected in tests
