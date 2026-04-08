@@ -250,26 +250,44 @@ The following reference files need updating to align with this spec:
 | `references/scenario.md` | Add `Domain` and `Spec` fields to scenario creation. Update index population to use domain grouping instead of page grouping. |
 | `SKILL.md` | Update memory structure (remove `snapshots/`). Update map format (remove `## Discovered Scenarios`, remove `Snapshot` column from States). Update scenario format. Update config format. Update Rules section (`{test_dir}` -> `test_dirs`). |
 
-### 12. Migration of Existing `.discovery/` Directories
+### 12. Healthcheck Mode — Self-Healing `.discovery/`
 
-When the skill encounters an existing `.discovery/` in the old format, it migrates silently:
+Instead of hardcoded migration rules, the skill has a **healthcheck** mode that autonomously analyzes and fixes the `.discovery/` directory.
 
-**config.yaml:**
-- `test_dir: X` -> scan subdirectories of X, build `test_dirs` map. If no subdirectories, create a single entry: `test_dirs: { default: X }`.
-- Remove `spec_suffix` field.
+**How it works:**
 
-**Scenario files:**
-- `**Spec file:** path/to/file.spec.ts` -> extract domain from path (parent directory name), extract spec name (filename without extension). Set `**Domain:**` and `**Spec:**`. Remove `**Spec file:**`.
-- If domain cannot be derived, set `**Domain:** default`.
+1. Read `SKILL.md` and all reference files to understand the expected structure (file formats, field names, directory layout, config schema)
+2. Read the entire `.discovery/` directory (config, maps, scenarios, index, any unexpected files/dirs)
+3. Compare what exists against what the skill expects
+4. Transform: delete, create, or modify files **only if necessary** to bring the directory into conformance
 
-**Map files:**
-- Remove `## Discovered Scenarios` section if present.
-- Remove `Snapshot` column from States tables if present.
-- Remove `**Last validated:**` field if present.
+The healthcheck has no hardcoded transformation rules. It derives everything from the current skill spec. If the skill evolves, the healthcheck automatically adapts because it always reads the latest spec before acting.
 
-**Index (`_index.md`):**
-- Rewrite from page-grouped to domain-grouped format. Domain is derived from each scenario's new `Domain` field.
-- Rebuild coverage counts from scenario statuses.
+**Reference file:** `references/healthcheck.md` — contains the detailed algorithm. Added as a new reference alongside explore, scenario, test, and bug.
 
-**`snapshots/` directory:**
-- Delete entirely. Contents are not migrated — they can be recaptured live.
+**Invocation:**
+
+- **Manual:** User says "healthcheck" — the skill runs the full analysis
+- **Automatic:** During `setup.md`, if the skill detects a major incoherence (unknown fields in config.yaml, files in unexpected formats, missing required structure), it triggers the healthcheck before proceeding
+
+**Scope of changes:**
+
+- Config fields that don't match the expected schema -> fix or remove
+- Files in directories that shouldn't exist (e.g. `snapshots/`) -> delete
+- File formats that don't match the spec (missing fields, deprecated fields, wrong structure) -> rewrite
+- Index that doesn't reflect the actual state of scenarios and maps -> rebuild
+- Silent operation — reports only blocking issues, fixes everything else without asking
+
+**This replaces explicit migration logic.** There are no version-specific migration paths. The healthcheck simply enforces "the `.discovery/` must match the current skill spec" regardless of what state it was in before.
+
+### 13. Updated Modes Table
+
+The skill now has five modes instead of four:
+
+| Mode | Trigger | Reference | Description |
+|------|---------|-----------|-------------|
+| **Explore** | "explore [page]" or default | `references/explore.md` | Cartograph a page: open, snapshot, document zones and interactions |
+| **Scenario** | "scenario [page]" | `references/scenario.md` | Design test scenarios from the cartography. No browser needed. |
+| **Test** | "test [scenario]" | `references/test.md` | Generate Playwright test from a scenario. Plays live first. |
+| **Bug** | "bug [description]", "fix [scenario]" | `references/bug.md` | Full pipeline: reproduce, scenario, test, trace, fix, green |
+| **Healthcheck** | "healthcheck" or auto-triggered by setup | `references/healthcheck.md` | Analyze `.discovery/` against skill spec, fix incoherences |
