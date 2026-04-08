@@ -154,7 +154,7 @@ One sentence describing the page structure.
 |----------|------|--------|----------|------|
 | [login](./login.md) | login | covered | critical | login |
 | [logout](./logout.md) | header | discovered | medium | -- |
-| [reset-pwd](./reset-pwd.md) | login | stale | high | reset-pwd |
+| [reset-pwd](./reset-pwd.md) | login | covered (stale) | high | reset-pwd |
 
 ### dashboard
 
@@ -218,3 +218,58 @@ mocks_dir: tests/mocks/data
 Changes from current format:
 - `test_dir` replaced by `test_dirs`
 - `spec_suffix` removed (hardcoded `.spec.ts`)
+
+### 9. `stale` Status Semantics
+
+`stale` is not a progression state like `discovered -> playing -> tested -> covered`. It is a **flag** that can be applied to any scenario regardless of its current status.
+
+- A `stale` scenario keeps its underlying status. A scenario that was `covered` and becomes `stale` is `covered (stale)` — the test still exists but may be outdated.
+- `stale` does **not** degrade coverage counts. A stale/covered test still counts as covered until someone re-validates or it actually fails.
+- `stale` is resolved by re-exploring the page and confirming the scenario still works. The skill can clear the flag silently if re-exploration shows no meaningful changes.
+- Only the coherence cycle sets `stale` — never the user directly.
+
+In the index, stale scenarios appear in the `## Stale` table for visibility, while keeping their status in the `## Scenarios` section unchanged.
+
+### 10. Staleness Detection
+
+The coherence cycle detects staleness by comparing the map's `Last explored` date against the scenario's creation or last validation date. If the map was re-explored after the scenario was last validated and the map content changed, the scenario is marked stale.
+
+This is a **page-level** check, not element-level. If any part of a page's map changed, all scenarios referencing that page are flagged. This is coarse but simple and avoids the complexity of tracking which specific elements each scenario uses.
+
+### 11. Reference Files Impacted
+
+The following reference files need updating to align with this spec:
+
+| File | Changes needed |
+|------|---------------|
+| `references/setup.md` | Replace `test_dir` with `test_dirs`. Add monorepo detection step. Add `test_dirs` auto-population logic. Remove `spec_suffix`. |
+| `references/explore.md` | Remove snapshot persistence steps. Extract snapshot data into map during session instead of saving files. Remove `Last validated` (use `Last explored` only). |
+| `references/test.md` | Replace `{test_dir}` and `{spec_suffix}` with domain-based path resolution: `test_dirs[scenario.domain] / scenario.spec + .spec.ts`. |
+| `references/bug.md` | Replace snapshot file reads with live re-snapshots. Replace `{spec_suffix}` with hardcoded `.spec.ts`. |
+| `references/snapshots.md` | Delete entirely — no longer relevant. |
+| `references/scenario.md` | Add `Domain` and `Spec` fields to scenario creation. Update index population to use domain grouping instead of page grouping. |
+| `SKILL.md` | Update memory structure (remove `snapshots/`). Update map format (remove `## Discovered Scenarios`, remove `Snapshot` column from States). Update scenario format. Update config format. Update Rules section (`{test_dir}` -> `test_dirs`). |
+
+### 12. Migration of Existing `.discovery/` Directories
+
+When the skill encounters an existing `.discovery/` in the old format, it migrates silently:
+
+**config.yaml:**
+- `test_dir: X` -> scan subdirectories of X, build `test_dirs` map. If no subdirectories, create a single entry: `test_dirs: { default: X }`.
+- Remove `spec_suffix` field.
+
+**Scenario files:**
+- `**Spec file:** path/to/file.spec.ts` -> extract domain from path (parent directory name), extract spec name (filename without extension). Set `**Domain:**` and `**Spec:**`. Remove `**Spec file:**`.
+- If domain cannot be derived, set `**Domain:** default`.
+
+**Map files:**
+- Remove `## Discovered Scenarios` section if present.
+- Remove `Snapshot` column from States tables if present.
+- Remove `**Last validated:**` field if present.
+
+**Index (`_index.md`):**
+- Rewrite from page-grouped to domain-grouped format. Domain is derived from each scenario's new `Domain` field.
+- Rebuild coverage counts from scenario statuses.
+
+**`snapshots/` directory:**
+- Delete entirely. Contents are not migrated — they can be recaptured live.
