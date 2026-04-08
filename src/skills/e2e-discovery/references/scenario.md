@@ -22,19 +22,100 @@ Design test scenarios from the cartography. No browser needed — pure planning.
 
 ### 3. Generate scenarios
 
-- For each gap, write a scenario file (see Scenario File Format in SKILL.md)
-- Priority rules:
-  - `critical` — user can't complete their main task without this (create, save, delete)
-  - `high` — important but has workarounds (edit, filter, sort)
-  - `medium` — secondary features (undo/redo, keyboard shortcuts)
-  - `low` — edge cases and cosmetic (empty states, error messages)
+For each gap, create a scenario file at `{discovery_root}/scenarios/{name}.md` using this format:
+
+```markdown
+# Scenario: [Human-readable name]
+
+**Status:** discovered | playing | tested | covered | blocked
+**Priority:** critical | high | medium | low
+**Page:** [page-name]
+**Domain:** auth
+**Spec:** login-flow
+
+## Preconditions
+
+- URL: /path/to/start
+- Required mocks: list any specific mock data needed
+- Initial state: what the page should look like before starting
+
+## Steps
+
+1. Action description
+   - **Do:** playwright-cli command or user action
+   - **Expect:** what should change
+
+## Assertions
+
+- [ ] assertion
+
+## Notes
+
+Observations, edge cases, blockers found during testing.
+```
+
+**Field rules:**
+
+- **Domain** is a key in the `test_dirs` config map. It determines which test directory the spec goes into. Infer the domain from the page's route (e.g., `/auth/login` → `auth`, `/dashboard/settings` → `dashboard`). If the route is ambiguous or does not map cleanly to a domain, ask the user.
+- **Spec** is the test file name only — no path, no extension. The full path is resolved as: `test_dirs[domain] / spec + .spec.ts`. For example, if domain is `auth` and spec is `login-flow`, the test file lives at `test_dirs.auth/login-flow.spec.ts`.
+- **Status** starts as `discovered` when first created.
+
+**Priority rules:**
+
+- `critical` — user can't complete their main task without this (create, save, delete)
+- `high` — important but has workarounds (edit, filter, sort)
+- `medium` — secondary features (undo/redo, keyboard shortcuts)
+- `low` — edge cases and cosmetic (empty states, error messages)
 
 **Volume guard:** If more than 10 scenarios would be created, propose the top 5-7 by priority and ask the user before creating all of them.
 
 ### 4. Update index
 
-- Add new scenarios to `_index.md` with status `discovered`
-- Update coverage summary counts
+Add new scenarios to `{discovery_root}/scenarios/_index.md`. Scenarios are grouped by domain under `### [domain]` headings.
+
+The full index format:
+
+```markdown
+# Discovery Index
+
+## Coverage
+
+| Domain | Pages | Scenarios | Covered | Last explored |
+|--------|-------|-----------|---------|---------------|
+| auth   | 2     | 5         | 3       | 2026-04-08    |
+
+## Stale
+
+| Scenario | Reason |
+|----------|--------|
+
+## Blocked
+
+| Lead | Blocker | Source |
+|------|---------|--------|
+
+## Scenarios
+
+### auth
+
+| Scenario | Page | Status | Priority | Spec |
+|----------|------|--------|----------|------|
+| [login-happy-path](./login-happy-path.md) | login | discovered | critical | -- |
+| [login-invalid-creds](./login-invalid-creds.md) | login | discovered | high | -- |
+
+### dashboard
+
+| Scenario | Page | Status | Priority | Spec |
+|----------|------|--------|----------|------|
+| [widget-create](./widget-create.md) | dashboard | discovered | critical | -- |
+```
+
+**Update rules:**
+
+- If the domain section (`### [domain]`) does not exist yet, create it under `## Scenarios` with its own table.
+- Add new scenarios as rows with status `discovered` and spec `--`.
+- When a scenario gets a spec written later, replace `--` with the spec name.
+- Update the `## Coverage` summary table with domain-level counts: total pages explored, total scenarios, how many have status `covered`, and the date of last exploration.
 
 ### 5. Report to user
 
