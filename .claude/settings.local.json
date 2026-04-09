@@ -23,7 +23,9 @@
 			"Bash(gh release:*)",
 			"Bash(git rm:*)",
 			"Bash(git push:*)",
-			"Bash(git ls-tree:*)"
+			"Bash(git ls-tree:*)",
+			"Bash(git ls-remote:*)",
+			"Bash(grep -oE 'refs/tags/v?[0-9.]+$')"
 		]
 	},
 	"enabledPlugins": {

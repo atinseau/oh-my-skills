@@ -84,6 +84,25 @@ describe("oh-my-skills Update (real script)", () => {
 		expect(r.output).toBe(VERSION);
 	});
 
+	// ── get_remote_version ───────────────────────────────────────────────
+
+	it("should parse remote version from git tags", () => {
+		// Extract get_remote_version from update.sh and call it directly
+		// This catches regressions in the tag-parsing pipeline (grep/sed/sort)
+		const r = exec(
+			id,
+			`bash -c '
+				source /scripts/lib.sh 2>/dev/null
+				REPO_URL=/tmp/remote-repo
+				# Source only the function definition from update.sh
+				eval "$(sed -n "/^get_remote_version()/,/^}/p" /scripts/update.sh)"
+				get_remote_version
+			'`,
+		);
+		expect(r.exitCode).toBe(0);
+		expect(r.output).toBe(VERSION);
+	});
+
 	// ── Manual mode ──────────────────────────────────────────────────────
 
 	it("should report up-to-date in manual mode when no update available", () => {

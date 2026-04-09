@@ -68,7 +68,7 @@ get_local_version() {
 get_remote_version() {
     local raw
     raw=$(git ls-remote --tags "$REPO_URL" 2>/dev/null \
-        | sed -n 's|.*refs/tags/\(v\?[0-9.]*\)$|\1|p' | sort -V | tail -1)
+        | grep -oE 'refs/tags/v?[0-9.]+$' | sed 's|refs/tags/||' | sort -V | tail -1)
     # Strip leading v for consistent comparison
     echo "${raw#v}"
 }
