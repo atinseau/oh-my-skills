@@ -174,6 +174,26 @@ launch_one() {
     ) &
 }
 
+# Check if all commands in an array are identical.
+is_uniform() {
+    local -n _cmds_ref=$1
+    [[ ${#_cmds_ref[@]} -le 1 ]] && return 0
+    local first="${_cmds_ref[0]}"
+    for c in "${_cmds_ref[@]:1}"; do
+        [[ "$c" != "$first" ]] && return 1
+    done
+    return 0
+}
+
+# Erase N lines above cursor (TTY only).
+erase_lines() {
+    [[ "$IS_TTY" -eq 0 ]] && return
+    local n="$1"
+    for ((i=0; i<n; i++)); do
+        printf '\033[A\033[K'
+    done
+}
+
 # Poll for completed jobs, showing a spinner until all are done.
 wait_with_spinner() {
     local tmpdir="$1"; shift
@@ -201,6 +221,79 @@ wait_with_spinner() {
     done
 }
 
+# Poll for completed grouped jobs, redrawing the block as each finishes.
+# Displays: header with remaining dirs + completed results below.
+wait_grouped() {
+    local tmpdir="$1" cmd="$2"; shift 2
+    local names=("$@")
+    local total=${#names[@]}
+    local -a done_names=()
+    local -a done_codes=()
+    local prev_done=0
+
+    # Print initial header with all dirs
+    local joined
+    joined=$(printf '%s, ' "${names[@]}"); joined=${joined%, }
+    printf '  %s▸%s %s %s→ %s%s\n' "$BLUE" "$RESET" "$cmd" "$DIM" "$joined" "$RESET"
+    local lines_drawn=1
+
+    while [[ ${#done_names[@]} -lt $total ]]; do
+        sleep 0.1
+
+        # Detect newly completed jobs
+        local changed=0
+        for name in "${names[@]}"; do
+            local already=0
+            for dn in "${done_names[@]}"; do
+                [[ "$dn" == "$name" ]] && { already=1; break; }
+            done
+            [[ $already -eq 1 ]] && continue
+
+            if [[ -f "${tmpdir}/$(sanitize "$name").rc" ]]; then
+                done_codes+=("$(cat "${tmpdir}/$(sanitize "$name").rc" 2>/dev/null || echo 1)")
+                done_names+=("$name")
+                changed=1
+            fi
+        done
+
+        [[ $changed -eq 0 ]] && continue
+
+        if [[ "$IS_TTY" -eq 1 ]]; then
+            # TTY: erase block and redraw with updated state
+            erase_lines "$lines_drawn"
+
+            local remaining=()
+            for name in "${names[@]}"; do
+                local done=0
+                for dn in "${done_names[@]}"; do
+                    [[ "$dn" == "$name" ]] && { done=1; break; }
+                done
+                [[ $done -eq 0 ]] && remaining+=("$name")
+            done
+
+            if [[ ${#remaining[@]} -gt 0 ]]; then
+                local joined
+                joined=$(printf '%s, ' "${remaining[@]}"); joined=${joined%, }
+                printf '  %s▸%s %s %s→ %s%s\n' "$BLUE" "$RESET" "$cmd" "$DIM" "$joined" "$RESET"
+            else
+                printf '  %s▸%s %s\n' "$BLUE" "$RESET" "$cmd"
+            fi
+
+            for ((i=0; i<${#done_names[@]}; i++)); do
+                print_status "${done_codes[$i]}" "${done_names[$i]}"
+            done
+
+            lines_drawn=$((1 + ${#done_names[@]}))
+        else
+            # Non-TTY: append only new results
+            for ((i=prev_done; i<${#done_names[@]}; i++)); do
+                print_status "${done_codes[$i]}" "${done_names[$i]}"
+            done
+            prev_done=${#done_names[@]}
+        fi
+    done
+}
+
 # Run a batch step: launch all jobs in parallel, wait, print results.
 run_step() {
     local dirs=() cmds=()
@@ -210,31 +303,46 @@ run_step() {
 
     local tmpdir
     tmpdir=$(mktemp -d)
-    trap 'rm -rf "$tmpdir" 2>/dev/null; trap - INT TERM' INT TERM
+    local pids=()
 
-    # Print headers and launch jobs
+    # Launch all jobs
     for ((i=0; i<${#dirs[@]}; i++)); do
-        printf '\n  %s▸%s %s %s→ %s%s\n' \
-            "$BLUE" "$RESET" "${cmds[$i]}" "$DIM" "${dirs[$i]}" "$RESET"
         launch_one "${dirs[$i]}" "${cmds[$i]}" "$tmpdir"
+        pids+=($!)
     done
 
-    wait_with_spinner "$tmpdir" "${dirs[@]}"
+    trap 'for p in "${pids[@]}"; do kill "$p" 2>/dev/null; done; rm -rf "$tmpdir" 2>/dev/null; exit 130' INT TERM
 
-    # Collect results
+    printf '\n'
+    if is_uniform cmds; then
+        # Grouped: single header with live-updating dir list
+        wait_grouped "$tmpdir" "${cmds[0]}" "${dirs[@]}"
+    else
+        # Non-grouped: one header per dir, then spinner
+        for ((i=0; i<${#dirs[@]}; i++)); do
+            printf '  %s▸%s %s %s→ %s%s\n' \
+                "$BLUE" "$RESET" "${cmds[$i]}" "$DIM" "${dirs[$i]}" "$RESET"
+        done
+        wait_with_spinner "$tmpdir" "${dirs[@]}"
+        for name in "${dirs[@]}"; do
+            local rc
+            rc=$(cat "${tmpdir}/$(sanitize "$name").rc" 2>/dev/null || echo 1)
+            print_status "$rc" "$name"
+        done
+    fi
+
+    # Collect failures and show error blocks
     local step_failed=0
     local failed=()
     for name in "${dirs[@]}"; do
         local rc
         rc=$(cat "${tmpdir}/$(sanitize "$name").rc" 2>/dev/null || echo 1)
-        print_status "$rc" "$name"
         if [[ "$rc" -ne 0 ]]; then
             step_failed=1
             failed+=("$name")
         fi
     done
 
-    # Show error output for failed jobs
     for name in "${failed[@]}"; do
         local outfile="${tmpdir}/$(sanitize "$name").out"
         [[ -s "$outfile" ]] && print_error_block "$name" "$outfile"
