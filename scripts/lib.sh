@@ -175,6 +175,35 @@ init_registry() {
     log_success "Registry initialized (v$version)"
 }
 
+# Read all skill paths from the registry (claude + copilot)
+# Usage: registry_read_paths → one path per line
+registry_read_paths() {
+    if [[ ! -f "$REGISTRY_FILE" ]]; then
+        return 0
+    fi
+    if command -v jq &> /dev/null; then
+        jq -r '.skills.claude[]?, .skills.copilot[]?' "$REGISTRY_FILE" 2>/dev/null
+    else
+        grep -oE '"(/[^"]+)"' "$REGISTRY_FILE" 2>/dev/null | tr -d '"'
+    fi
+}
+
+# Append a skill path to the registry for a given LLM
+# Usage: registry_append_path "claude" "/path/to/SKILL.md"
+registry_append_path() {
+    local llm="$1"
+    local path="$2"
+    local tmp
+    tmp=$(mktemp)
+    if command -v jq &> /dev/null; then
+        jq --arg p "$path" ".skills.${llm} += [\$p]" "$REGISTRY_FILE" > "$tmp" && mv "$tmp" "$REGISTRY_FILE"
+    else
+        sed -i.bak "s|\"${llm}\":\\[|\"${llm}\":[\"${path}\",|" "$REGISTRY_FILE"
+        sed -i.bak 's/,]/]/' "$REGISTRY_FILE"
+        rm -f "$REGISTRY_FILE.bak"
+    fi
+}
+
 # Extract a YAML frontmatter field from a SKILL.md file
 # Usage: extract_frontmatter "field" "file"
 extract_frontmatter() {
@@ -239,32 +268,25 @@ clean_installed_skills() {
         rm -rf "$SKILLS_DIR"
     fi
 
-    # Remove LLM wrappers/symlinks tracked by the registry
-    if [[ -f "$REGISTRY_FILE" ]]; then
-        local paths=""
-        if command -v jq &> /dev/null; then
-            paths=$(jq -r '.skills.claude[]?, .skills.copilot[]?' "$REGISTRY_FILE" 2>/dev/null)
-        else
-            paths=$(grep -oE '"(/[^"]+)"' "$REGISTRY_FILE" 2>/dev/null | tr -d '"')
-        fi
+    local paths
+    paths=$(registry_read_paths)
 
-        while IFS= read -r path; do
-            [[ -z "$path" ]] && continue
-            local dir
-            dir="$(dirname "$path")"
-            if [[ -L "$dir" ]]; then
-                # Claude symlink
-                rm -f "$dir"
-            elif [[ -f "$path" ]]; then
-                # Copilot wrapper or legacy Claude wrapper
-                rm -f "$path"
-                # Remove parent dir if now empty (legacy Claude wrapper dirs)
-                if [[ -d "$dir" ]] && [[ -z "$(ls -A "$dir")" ]]; then
-                    rmdir "$dir"
-                fi
+    while IFS= read -r path; do
+        [[ -z "$path" ]] && continue
+        local dir
+        dir="$(dirname "$path")"
+        if [[ -L "$dir" ]]; then
+            # Claude symlink
+            rm -f "$dir"
+        elif [[ -f "$path" ]]; then
+            # Copilot wrapper or legacy Claude wrapper
+            rm -f "$path"
+            # Remove parent dir if now empty (legacy Claude wrapper dirs)
+            if [[ -d "$dir" ]] && [[ -z "$(ls -A "$dir")" ]]; then
+                rmdir "$dir"
             fi
-        done <<< "$paths"
-    fi
+        fi
+    done <<< "$paths"
 }
 
 install_skills() {
@@ -314,16 +336,8 @@ install_skills() {
             ln -sfn "$canonical_dir" "$claude_link"
             log_success "Linked Claude skill '${CYAN}$skill_name${NC}'"
 
-            local tmp
-            tmp=$(mktemp)
             local claude_dest="$claude_link/SKILL.md"
-            if command -v jq &> /dev/null; then
-                jq --arg p "$claude_dest" '.skills.claude += [$p]' "$REGISTRY_FILE" > "$tmp" && mv "$tmp" "$REGISTRY_FILE"
-            else
-                sed -i.bak "s|\"claude\":\\[|\"claude\":[\"$claude_dest\",|" "$REGISTRY_FILE"
-                sed -i.bak 's/,]/]/' "$REGISTRY_FILE"
-                rm -f "$REGISTRY_FILE.bak"
-            fi
+            registry_append_path "claude" "$claude_dest"
         fi
 
         # Copilot: wrapper file (needs specific YAML frontmatter)
@@ -334,15 +348,7 @@ install_skills() {
             generate_copilot_wrapper "$canonical_path" "$skill_name" "$skill_description" "$copilot_dest"
             log_success "Created Copilot wrapper '${CYAN}$skill_name${NC}'"
 
-            local tmp
-            tmp=$(mktemp)
-            if command -v jq &> /dev/null; then
-                jq --arg p "$copilot_dest" '.skills.copilot += [$p]' "$REGISTRY_FILE" > "$tmp" && mv "$tmp" "$REGISTRY_FILE"
-            else
-                sed -i.bak "s|\"copilot\":\\[|\"copilot\":[\"$copilot_dest\",|" "$REGISTRY_FILE"
-                sed -i.bak 's/,]/]/' "$REGISTRY_FILE"
-                rm -f "$REGISTRY_FILE.bak"
-            fi
+            registry_append_path "copilot" "$copilot_dest"
         fi
     done
 }
