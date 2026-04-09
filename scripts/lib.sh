@@ -254,35 +254,38 @@ clean_dev_files() {
 }
 
 # Remove all installed skills (canonical + LLM symlinks/wrappers) for a clean reinstall.
+# Uses the registry as source of truth for what was installed.
 clean_installed_skills() {
     # Remove canonical skills
     if [[ -d "$SKILLS_DIR" ]]; then
         rm -rf "$SKILLS_DIR"
     fi
 
-    # Remove Claude skills owned by oh-my-skills (symlinks or legacy wrapper directories)
-    local claude_skills_dir="$HOME/.claude/skills"
-    if [[ -d "$claude_skills_dir" ]]; then
-        for entry in "$claude_skills_dir"/*; do
-            if [[ -L "$entry" ]] && readlink "$entry" | grep -q "oh-my-skills/skills/"; then
-                # Current format: symlink to canonical dir
-                rm -f "$entry"
-            elif [[ -d "$entry" && -f "$entry/SKILL.md" ]] && grep -q "oh-my-skills/skills/" "$entry/SKILL.md" 2>/dev/null; then
-                # Legacy format: wrapper directory containing redirect file
-                rm -rf "$entry"
-            fi
-        done
-    fi
+    # Remove LLM wrappers/symlinks tracked by the registry
+    if [[ -f "$REGISTRY_FILE" ]]; then
+        local paths=""
+        if command -v jq &> /dev/null; then
+            paths=$(jq -r '.skills.claude[]?, .skills.copilot[]?' "$REGISTRY_FILE" 2>/dev/null)
+        else
+            paths=$(grep -oE '"(/[^"]+)"' "$REGISTRY_FILE" 2>/dev/null | tr -d '"')
+        fi
 
-    # Remove Copilot wrappers that reference oh-my-skills
-    local copilot_skills_dir="$HOME/.copilot/skills"
-    if [[ -d "$copilot_skills_dir" ]]; then
-        for f in "$copilot_skills_dir"/*.prompt.md; do
-            [[ ! -f "$f" ]] && continue
-            if grep -q "oh-my-skills/skills/" "$f" 2>/dev/null; then
-                rm -f "$f"
+        while IFS= read -r path; do
+            [[ -z "$path" ]] && continue
+            local dir
+            dir="$(dirname "$path")"
+            if [[ -L "$dir" ]]; then
+                # Claude symlink
+                rm -f "$dir"
+            elif [[ -f "$path" ]]; then
+                # Copilot wrapper or legacy Claude wrapper
+                rm -f "$path"
+                # Remove parent dir if now empty (legacy Claude wrapper dirs)
+                if [[ -d "$dir" ]] && [[ -z "$(ls -A "$dir")" ]]; then
+                    rmdir "$dir"
+                fi
             fi
-        done
+        done <<< "$paths"
     fi
 }
 
@@ -294,17 +297,9 @@ install_skills() {
         return 0
     fi
 
-    # Clean slate: remove all previously installed skills
+    # Clean slate: read registry to know what to remove, then wipe and reinstall
     clean_installed_skills
-
-    # Reset registry skills (preserve version)
-    local tmp
-    tmp=$(mktemp)
-    if command -v jq &> /dev/null; then
-        jq '.skills = {"claude":[],"copilot":[]}' "$REGISTRY_FILE" > "$tmp" && mv "$tmp" "$REGISTRY_FILE"
-    else
-        echo "{\"version\":\"$(get_version)\",\"skills\":{\"claude\":[],\"copilot\":[]}}" > "$REGISTRY_FILE"
-    fi
+    init_registry
 
     # Ensure canonical skills directory exists
     mkdir -p "$SKILLS_DIR"

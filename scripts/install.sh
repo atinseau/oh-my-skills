@@ -71,7 +71,6 @@ main() {
     clone_repo
 
     print_step "Installing skills..."
-    init_registry
     install_skills
 
     print_step "Installing commands..."

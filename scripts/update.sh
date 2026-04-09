@@ -176,7 +176,6 @@ apply_update() {
     user_shell=$(detect_shell)
 
     detect_llms
-    init_registry
     install_skills
     install_commands
     clean_dev_files
