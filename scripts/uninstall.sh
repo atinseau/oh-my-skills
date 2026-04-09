@@ -24,60 +24,7 @@ load_lib() {
 load_lib
 
 remove_skills() {
-    if [[ ! -f "$REGISTRY_FILE" ]]; then
-        log_warning "No registry found, skipping skill removal"
-        return 0
-    fi
-
-    # Claude skills are symlinks pointing to ~/.oh-my-skills/skills/
-    # Copilot skills are wrapper files referencing ~/.oh-my-skills/skills/
-    if command -v jq &> /dev/null; then
-        for path in $(jq -r '.skills.claude[]' "$REGISTRY_FILE" 2>/dev/null); do
-            local skill_dir
-            skill_dir="$(dirname "$path")"
-            # Check if it's a symlink to oh-my-skills
-            if [[ -L "$skill_dir" ]] && readlink "$skill_dir" | grep -q "oh-my-skills/skills/"; then
-                rm -f "$skill_dir"
-                log_success "Removed Claude skill: $(basename "$skill_dir")"
-            elif [[ -f "$path" ]]; then
-                # Legacy wrapper file fallback
-                if grep -q "oh-my-skills/skills/" "$path" 2>/dev/null; then
-                    rm -f "$path"
-                    if [[ -d "$skill_dir" ]] && [[ -z "$(ls -A "$skill_dir")" ]]; then
-                        rmdir "$skill_dir"
-                    fi
-                    log_success "Removed Claude wrapper: $(basename "$skill_dir")"
-                fi
-            fi
-        done
-
-        for path in $(jq -r '.skills.copilot[]' "$REGISTRY_FILE" 2>/dev/null); do
-            if [[ -f "$path" ]]; then
-                if grep -q "oh-my-skills/skills/" "$path" 2>/dev/null; then
-                    rm -f "$path"
-                    log_success "Removed Copilot wrapper: $(basename "$path")"
-                fi
-            fi
-        done
-    else
-        # Without jq: grep paths from JSON
-        grep -oE '"(/[^"]+)"' "$REGISTRY_FILE" 2>/dev/null | tr -d '"' | while read -r path; do
-            local entry_dir
-            entry_dir="$(dirname "$path")"
-            if [[ -L "$entry_dir" ]] && readlink "$entry_dir" | grep -q "oh-my-skills/skills/"; then
-                rm -f "$entry_dir"
-                log_success "Removed skill: $(basename "$entry_dir")"
-            elif [[ -f "$path" ]]; then
-                if grep -q "oh-my-skills/skills/" "$path" 2>/dev/null; then
-                    rm -f "$path"
-                    if [[ -d "$entry_dir" ]] && [[ -z "$(ls -A "$entry_dir")" ]]; then
-                        rmdir "$entry_dir"
-                    fi
-                    log_success "Removed wrapper: $(basename "$path")"
-                fi
-            fi
-        done
-    fi
+    clean_installed_skills --safe
 }
 
 remove_sourcing() {

@@ -261,13 +261,18 @@ clean_dev_files() {
 }
 
 # Remove all installed skills (canonical + LLM symlinks/wrappers) for a clean reinstall.
-# Uses the registry as source of truth for what was installed.
+# Usage: clean_installed_skills [--safe]
+#   --safe: verify each path belongs to oh-my-skills before removing (used by uninstall)
 clean_installed_skills() {
-    # Remove canonical skills
+    local safe=false
+    [[ "${1:-}" == "--safe" ]] && safe=true
+
+    # Remove canonical skills (always safe — it's our directory)
     if [[ -d "$SKILLS_DIR" ]]; then
         rm -rf "$SKILLS_DIR"
     fi
 
+    # Remove LLM wrappers/symlinks tracked by the registry
     local paths
     paths=$(registry_read_paths)
 
@@ -275,15 +280,27 @@ clean_installed_skills() {
         [[ -z "$path" ]] && continue
         local dir
         dir="$(dirname "$path")"
+
         if [[ -L "$dir" ]]; then
-            # Claude symlink
+            # Symlink (Claude) — verify target if safe mode
+            if [[ "$safe" == true ]] && ! readlink "$dir" | grep -q "oh-my-skills/skills/"; then
+                continue
+            fi
             rm -f "$dir"
+            if [[ "$safe" == true ]]; then
+                log_success "Removed Claude skill: $(basename "$dir")"
+            fi
         elif [[ -f "$path" ]]; then
-            # Copilot wrapper or legacy Claude wrapper
+            # Wrapper file (Copilot or legacy Claude)
+            if [[ "$safe" == true ]] && ! grep -q "oh-my-skills/skills/" "$path" 2>/dev/null; then
+                continue
+            fi
             rm -f "$path"
-            # Remove parent dir if now empty (legacy Claude wrapper dirs)
             if [[ -d "$dir" ]] && [[ -z "$(ls -A "$dir")" ]]; then
                 rmdir "$dir"
+            fi
+            if [[ "$safe" == true ]]; then
+                log_success "Removed Copilot wrapper: $(basename "$path")"
             fi
         fi
     done <<< "$paths"
