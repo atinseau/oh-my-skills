@@ -103,6 +103,12 @@ Before tracing code, determine what kind of bug this is:
 
 **How to distinguish:** open the page with `playwright-cli open [url]`, replay the scenario steps, snapshot and compare with what the test asserts. If the UI is correct but the test fails, it is a test bug. If the UI is wrong, it is an app bug.
 
+**Checkpoint -- confirm before proceeding:**
+
+> "I classified this as a **[failure type]** bug. [One sentence justification]. Proceeding to trace the root cause in [target area]. OK?"
+
+Wait for user confirmation. If the user disagrees, re-classify.
+
 ### 3. Trace the root cause
 
 1. **Observe the bug live with playwright-cli**
@@ -140,15 +146,7 @@ Before tracing code, determine what kind of bug this is:
 ### 6. Close the loop
 
 1. **Update the scenario** -- status to `covered` in both the scenario file and `_index.md`. Add a note: "Fixed in [commit hash] -- [brief description]"
-2. **Update the index** using domain-grouped format. Add or update the scenario row under the correct `### [Domain]` heading. Update `## Coverage` table by domain:
-   ```
-   ## Coverage
-
-   | Domain | Pages | Scenarios | Covered | Last explored |
-   |--------|-------|-----------|---------|---------------|
-   | auth   | 2     | 4         | 3       | 2026-04-08    |
-   | editor | 3     | 8         | 5       | 2026-04-07    |
-   ```
+2. **Update the index** using the **Scenario Index** format from SKILL.md. Add or update the scenario row under the correct `### [Domain]` heading. Recalculate the `## Coverage` table by domain.
 3. **Update the map** (if the fix changed the UI) -- update `{discovery_root}/map/`, set `Last explored` to today
 4. **Report**
    > "Bug fixed. [spec file] now passes. [N] total E2E tests green. Scenario [name] marked as covered."
@@ -164,7 +162,7 @@ Before tracing code, determine what kind of bug this is:
 5. **If you can't find the root cause after all 4 search strategies, stop and ask** -- don't guess
 6. **Update the discovery memory** -- close the loop so future sessions know the bug is fixed
 7. **If the fix is in mock data, say so clearly** -- mock bugs aren't app bugs
-8. **If the root cause is in a shared package (@culture-live/*)** -- don't modify it. Document the root cause precisely and report to the user.
+8. **If the root cause is in a shared/external package** -- don't modify it. Document the root cause precisely and report to the user.
 
 ## Troubleshooting
 

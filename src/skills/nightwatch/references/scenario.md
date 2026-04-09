@@ -22,37 +22,7 @@ Design test scenarios from the cartography. No browser needed — pure planning.
 
 ### 3. Generate scenarios
 
-For each gap, create a scenario file at `{discovery_root}/scenarios/{name}.md` using this format:
-
-```markdown
-# Scenario: [Human-readable name]
-
-**Status:** discovered | playing | tested | covered | blocked
-**Priority:** critical | high | medium | low
-**Page:** [page-name]
-**Domain:** auth
-**Spec:** login-flow
-
-## Preconditions
-
-- URL: /path/to/start
-- Required mocks: list any specific mock data needed
-- Initial state: what the page should look like before starting
-
-## Steps
-
-1. Action description
-   - **Do:** playwright-cli command or user action
-   - **Expect:** what should change
-
-## Assertions
-
-- [ ] assertion
-
-## Notes
-
-Observations, edge cases, blockers found during testing.
-```
+For each gap, create a scenario file at `{discovery_root}/scenarios/{name}.md` using the **Scenario File** format from SKILL.md.
 
 **Field rules:**
 
@@ -71,44 +41,7 @@ Observations, edge cases, blockers found during testing.
 
 ### 4. Update index
 
-Add new scenarios to `{discovery_root}/scenarios/_index.md`. Scenarios are grouped by domain under `### [domain]` headings.
-
-The full index format:
-
-```markdown
-# Discovery Index
-
-## Coverage
-
-| Domain | Pages | Scenarios | Covered | Last explored |
-|--------|-------|-----------|---------|---------------|
-| auth   | 2     | 5         | 3       | 2026-04-08    |
-
-## Stale
-
-| Scenario | Reason |
-|----------|--------|
-
-## Blocked
-
-| Lead | Blocker | Source |
-|------|---------|--------|
-
-## Scenarios
-
-### auth
-
-| Scenario | Page | Status | Priority | Spec |
-|----------|------|--------|----------|------|
-| [login-happy-path](./login-happy-path.md) | login | discovered | critical | -- |
-| [login-invalid-creds](./login-invalid-creds.md) | login | discovered | high | -- |
-
-### dashboard
-
-| Scenario | Page | Status | Priority | Spec |
-|----------|------|--------|----------|------|
-| [widget-create](./widget-create.md) | dashboard | discovered | critical | -- |
-```
+Add new scenarios to `{discovery_root}/scenarios/_index.md` using the **Scenario Index** format from SKILL.md. Scenarios are grouped by domain under `### [domain]` headings.
 
 **Update rules:**
 

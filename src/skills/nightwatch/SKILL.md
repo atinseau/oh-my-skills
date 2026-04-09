@@ -1,10 +1,10 @@
 ---
-name: e2e-discovery
+name: nightwatch
 description: Use when writing E2E tests for a web app with Playwright, exploring UI to discover test scenarios, or debugging a failing E2E test. Especially useful when the test suite has gaps, the UI is complex, or you need to systematically cartograph pages before testing.
 by: oh-my-skills
 ---
 
-# E2E Discovery — Visual Testing with Persistent Memory
+# Nightwatch — Visual QA with Persistent Memory
 
 Discover tests by exploring the live UI with playwright-cli. Each session enriches a persistent knowledge base in `.discovery/` so the next session starts where the last one left off.
 
@@ -114,7 +114,7 @@ Checkboxes track what has been explored (not tested — that's in scenarios).
 ```markdown
 # Scenario: [Human-readable name]
 
-**Status:** discovered | playing | tested | covered | blocked
+**Status:** discovered | tested | covered | blocked
 **Priority:** critical | high | medium | low
 **Page:** [page-name]
 **Domain:** auth

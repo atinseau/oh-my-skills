@@ -28,6 +28,7 @@ Read every file and directory in {discovery_root}:
 For each file, compare its structure against the expected format. Fix silently.
 
 **Config:**
+- Missing `version` field -> add `version: 1` and run full migration (treat as legacy config)
 - Unknown fields -> remove
 - Missing required fields -> ask user or infer from project
 - Fields with wrong type (e.g. test_dir string vs test_dirs map) -> transform
