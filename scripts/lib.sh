@@ -15,7 +15,7 @@ COMMANDS_DIR="$INSTALL_DIR/commands"
 # Note: each script also has a _OMS_BOOTSTRAP_TAG for the curl|bash case
 # (chicken-and-egg: need the tag to download lib.sh, but tag lives here).
 # The release workflow patches both locations.
-DEFAULT_TAG="v0.1.15" # Source of truth for the current release tag.
+DEFAULT_TAG="" # Source of truth for the current release tag.
 
 # ─── Colors — AI Neon palette ─────────────────────────────────────────────────
 
