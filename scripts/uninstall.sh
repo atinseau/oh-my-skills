@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-_OMS_BOOTSTRAP_TAG="v0.1.13" # Bootstrap only — real source of truth is lib.sh; patched by release workflow
+_OMS_BOOTSTRAP_TAG="v0.1.14" # Bootstrap only — real source of truth is lib.sh; patched by release workflow
 
 # ── Bootstrap: load shared library ──────────────────────────────────────────
 # Duplicated across install.sh, uninstall.sh, update.sh (bootstrap problem:
