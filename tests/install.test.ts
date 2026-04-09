@@ -167,4 +167,63 @@ describe("oh-my-skills install.sh (e2e)", () => {
 		expect(r.output).toContain("Usage: oms");
 		expect(r.output).toContain("update");
 	});
+
+	describe("orphan skill cleanup", () => {
+		it("should remove skills deleted from the repo on reinstall", () => {
+			// Verify greeting-skill is installed from previous tests
+			expect(
+				exec(id, `test -d ${INSTALL}/skills/greeting-skill && echo ok`).output,
+			).toBe("ok");
+			expect(
+				exec(id, `test -d ${HOME}/.claude/skills/greeting-skill && echo ok`)
+					.output,
+			).toBe("ok");
+
+			// Simulate a repo update that removed greeting-skill:
+			// src/ was cleaned by clean_dev_files, recreate it without greeting-skill
+			exec(id, `mkdir -p ${INSTALL}/src/skills`);
+
+			// Reinstall over existing install dir
+			const r = exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/install.sh`);
+			expect(r.exitCode).toBe(0);
+			expect(r.output).toContain("Removed orphan skill");
+
+			// Canonical skill should be gone
+			expect(
+				exec(
+					id,
+					`test -d ${INSTALL}/skills/greeting-skill && echo exists || echo gone`,
+				).output,
+			).toBe("gone");
+
+			// Claude wrapper should be gone too
+			expect(
+				exec(
+					id,
+					`test -d ${HOME}/.claude/skills/greeting-skill && echo exists || echo gone`,
+				).output,
+			).toBe("gone");
+		});
+
+		it("should remove legacy flat skill files on install", () => {
+			// Simulate a legacy flat file left from an old version
+			exec(id, `printf 'legacy content' > ${INSTALL}/skills/old-skill.md`);
+
+			// Ensure src/skills exists (cleaned by clean_dev_files)
+			exec(id, `mkdir -p ${INSTALL}/src/skills`);
+
+			// Reinstall over existing
+			const r = exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/install.sh`);
+			expect(r.exitCode).toBe(0);
+			expect(r.output).toContain("Removed legacy skill file");
+
+			// Legacy file should be cleaned up
+			expect(
+				exec(
+					id,
+					`test -f ${INSTALL}/skills/old-skill.md && echo exists || echo gone`,
+				).output,
+			).toBe("gone");
+		});
+	});
 });

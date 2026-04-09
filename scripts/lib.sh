@@ -236,6 +236,81 @@ If the user provides additional context, incorporate it.
 WRAPPER
 }
 
+# Remove everything except runtime-required files from the install directory.
+# Called after clone/pull to keep the install directory lean.
+clean_dev_files() {
+    # Safety: abort if INSTALL_DIR is empty or root-like
+    if [[ -z "$INSTALL_DIR" || "$INSTALL_DIR" == "/" || "$INSTALL_DIR" == "$HOME" ]]; then
+        log_warning "Skipping clean_dev_files: INSTALL_DIR is unsafe ('$INSTALL_DIR')"
+        return 0
+    fi
+
+    # Allowlist: only these top-level entries are needed at runtime
+    local -a keep=(.git scripts skills commands shell registry.json package.json .update-cache)
+
+    for entry in "$INSTALL_DIR"/* "$INSTALL_DIR"/.*; do
+        local base
+        base=$(basename "$entry")
+        [[ "$base" == "." || "$base" == ".." ]] && continue
+
+        local allowed=0
+        for k in "${keep[@]}"; do
+            [[ "$base" == "$k" ]] && { allowed=1; break; }
+        done
+
+        if [[ $allowed -eq 0 ]]; then
+            rm -rf "$entry"
+        fi
+    done
+}
+
+# Remove skills from ~/.oh-my-skills/skills/ that no longer exist in src/skills/.
+# Also removes their LLM wrappers (Claude/Copilot).
+clean_orphan_skills() {
+    local src_skills_dir="$1"
+
+    [[ ! -d "$SKILLS_DIR" ]] && return 0
+
+    # Build list of valid skill names from source
+    local -a valid_names=()
+    for skill_dir in "$src_skills_dir"/*/; do
+        [[ ! -d "$skill_dir" ]] && continue
+        [[ ! -f "$skill_dir/SKILL.md" ]] && continue
+        valid_names+=("$(basename "$skill_dir")")
+    done
+
+    # Check installed skill directories
+    for installed in "$SKILLS_DIR"/*/; do
+        [[ ! -d "$installed" ]] && continue
+        local name
+        name=$(basename "$installed")
+        local found=0
+        for v in "${valid_names[@]}"; do
+            [[ "$v" == "$name" ]] && { found=1; break; }
+        done
+        if [[ $found -eq 0 && -n "$name" ]]; then
+            rm -rf "$installed"
+            # Remove LLM wrappers
+            rm -rf "$HOME/.claude/skills/$name"
+            rm -f "$HOME/.copilot/skills/$name.prompt.md"
+            log_success "Removed orphan skill '${CYAN}$name${NC}'"
+        fi
+    done
+
+    # Clean up legacy flat files (old format: skills/<name>.md instead of skills/<name>/SKILL.md)
+    for installed_file in "$SKILLS_DIR"/*.md; do
+        [[ ! -f "$installed_file" ]] && continue
+        local name
+        name=$(basename "$installed_file" .md)
+        [[ -z "$name" ]] && continue
+        rm -f "$installed_file"
+        # Remove LLM wrappers for legacy flat skills
+        rm -rf "$HOME/.claude/skills/$name"
+        rm -f "$HOME/.copilot/skills/$name.prompt.md"
+        log_success "Removed legacy skill file '${CYAN}$name${NC}'"
+    done
+}
+
 install_skills() {
     local src_skills_dir="$INSTALL_DIR/src/skills"
 
@@ -243,6 +318,9 @@ install_skills() {
         log_warning "No skills directory found in repository"
         return 0
     fi
+
+    # Clean up skills that were removed from the repo
+    clean_orphan_skills "$src_skills_dir"
 
     # Reset registry skills (preserve version)
     local tmp

@@ -179,6 +179,7 @@ apply_update() {
     init_registry
     install_skills
     install_commands
+    clean_dev_files
     create_shell_sourcing "update"
     inject_sourcing "$user_shell" "update"
 }

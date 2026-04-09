@@ -76,6 +76,7 @@ main() {
 
     print_step "Installing commands..."
     install_commands
+    clean_dev_files
 
     print_step "Configuring shell..."
     create_shell_sourcing "install"
