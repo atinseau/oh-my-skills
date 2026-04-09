@@ -261,7 +261,7 @@ clean_dev_files() {
         base=$(basename "$entry")
 
         case "$base" in
-            .|..|.git|scripts|skills|commands|shell|registry.json|package.json|.update-cache)
+            .|..|.git|scripts|skills|commands|shell|registry.json|.update-cache)
                 continue
                 ;;
         esac

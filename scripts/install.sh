@@ -79,14 +79,15 @@ main() {
 
     print_step "Installing commands..."
     install_commands
+
+    local version
+    version=$(get_version)
+
     clean_dev_files
 
     print_step "Configuring shell..."
     create_shell_sourcing "install"
     inject_sourcing "$user_shell" "install"
-
-    local version
-    version=$(get_version)
 
     print_success_box "Installation Complete! v${version}" \
         "" \
