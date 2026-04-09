@@ -21,15 +21,16 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           jq --arg v "$VERSION" '.version = $v' package.json > package.json.tmp && mv package.json.tmp package.json
+          sed -i "s|^DEFAULT_TAG=.*$|DEFAULT_TAG=\"${GITHUB_REF_NAME}\" # Source of truth for the current release tag.|" scripts/lib.sh
           for script in scripts/install.sh scripts/uninstall.sh scripts/update.sh; do
-            sed -i "s|^DEFAULT_TAG=.*$|DEFAULT_TAG=\"${GITHUB_REF_NAME}\" # Set by release workflow in tagged installer commits; kept empty on master|" "$script"
+            sed -i "s|^_OMS_BOOTSTRAP_TAG=.*$|_OMS_BOOTSTRAP_TAG=\"${GITHUB_REF_NAME}\" # Bootstrap only — real source of truth is lib.sh; patched by release workflow|" "$script"
           done
 
       - name: Commit version bump
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json scripts/install.sh scripts/uninstall.sh scripts/update.sh
+          git add package.json scripts/lib.sh scripts/install.sh scripts/uninstall.sh scripts/update.sh
           git diff --cached --quiet || git commit -m "chore: bump version to ${GITHUB_REF_NAME#v}"
           git push origin master
 
@@ -59,9 +60,10 @@ jobs:
 
       - name: Restore master installer to canary mode
         run: |
+          sed -i 's|^DEFAULT_TAG=.*$|DEFAULT_TAG="" # Source of truth for the current release tag.|' scripts/lib.sh
           for script in scripts/install.sh scripts/uninstall.sh scripts/update.sh; do
-            sed -i 's|^DEFAULT_TAG=.*$|DEFAULT_TAG="" # Set by release workflow in tagged installer commits; kept empty on master|' "$script"
+            sed -i 's|^_OMS_BOOTSTRAP_TAG=.*$|_OMS_BOOTSTRAP_TAG="" # Bootstrap only — real source of truth is lib.sh; patched by release workflow|' "$script"
           done
-          git add scripts/install.sh scripts/uninstall.sh scripts/update.sh
+          git add scripts/lib.sh scripts/install.sh scripts/uninstall.sh scripts/update.sh
           git diff --cached --quiet || git commit -m "chore: restore canary installer mode"
           git push origin master

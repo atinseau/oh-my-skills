@@ -11,6 +11,12 @@ REGISTRY_FILE="$INSTALL_DIR/registry.json"
 SHELL_FILE="$INSTALL_DIR/shell"
 COMMANDS_DIR="$INSTALL_DIR/commands"
 
+# Source of truth for the current release tag.
+# Note: each script also has a _OMS_BOOTSTRAP_TAG for the curl|bash case
+# (chicken-and-egg: need the tag to download lib.sh, but tag lives here).
+# The release workflow patches both locations.
+DEFAULT_TAG="v0.1.13"
+
 # ─── Colors — AI Neon palette ─────────────────────────────────────────────────
 
 RED='\033[0;31m'

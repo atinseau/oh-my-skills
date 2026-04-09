@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-DEFAULT_TAG="v0.1.13" # Set by release workflow in tagged installer commits; kept empty on master
+_OMS_BOOTSTRAP_TAG="v0.1.13" # Bootstrap only — real source of truth is lib.sh; patched by release workflow
 
 # Cache configuration
 UPDATE_CACHE_FILE="${HOME}/.oh-my-skills/.update-cache"
@@ -19,7 +19,7 @@ load_lib() {
     # Running via curl | bash — download lib.sh from the same release tag
     local _lib_tmp
     _lib_tmp="$(mktemp)"
-    local _base_url="${OMS_LIB_BASE_URL:-https://raw.githubusercontent.com/atinseau/oh-my-skills/${DEFAULT_TAG}/scripts}"
+    local _base_url="${OMS_LIB_BASE_URL:-https://raw.githubusercontent.com/atinseau/oh-my-skills/${_OMS_BOOTSTRAP_TAG}/scripts}"
     curl -fsSL "${_base_url}/lib.sh" -o "$_lib_tmp"
     # shellcheck disable=SC1090
     source "$_lib_tmp"
