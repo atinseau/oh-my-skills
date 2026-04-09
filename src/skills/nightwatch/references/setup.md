@@ -1,30 +1,33 @@
 # Setup -- Prerequisites & Config
 
-Run this before starting any mode. Skip steps already verified in this session.
+**MANDATORY.** Run this before starting any mode. Do NOT skip steps 1-2 — they are hard blockers. If playwright-cli is missing, install it. Do NOT fall back to MCP tools, Playwright codegen, direct Playwright scripts, or any other browser automation tool.
 
-## 1. Check playwright-cli binary
+## 1. Check playwright-cli binary (BLOCKING)
 
 ```bash
 playwright-cli --version
 ```
 
-- If the command exists -> go to step 2
-- If "command not found" -> install it:
+- If the command exists and prints a version -> go to step 2
+- If "command not found" -> **you MUST install it now**:
   ```bash
   npm install -g @playwright/cli@latest
   ```
   Then verify: `playwright-cli --version`
+- **If installation fails** -> stop and tell the user. Do NOT proceed without playwright-cli. Do NOT use any alternative tool.
 
-## 2. Check playwright-cli skill
+## 2. Check playwright-cli skill (BLOCKING)
 
 The `playwright-cli` skill must be available (it provides the full command reference for browser automation).
 
 - If the skill is listed in available skills -> go to step 3
-- If the skill is not available -> install it:
+- If the skill is NOT available -> **you MUST install it now**:
   ```bash
   playwright-cli install --skills
   ```
-  This installs the skill files into the `.claude/skills/` directory (or `.agents/skills/` depending on the project).
+  This installs the skill files into `~/.claude/skills/` (the user's home directory, NOT the project directory). The skill must be globally available, not scoped to a single project.
+  Then verify the skill appears in available skills.
+- **If installation fails** -> stop and tell the user. Do NOT proceed without the playwright-cli skill.
 
 ## 3. Monorepo detection
 

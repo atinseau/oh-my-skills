@@ -14,9 +14,13 @@ Instead of writing tests from specs, you **discover** them by exploring the runn
 
 The `.discovery/` directory is the persistent memory. It survives between conversations and prevents re-discovering what's already known.
 
-## Session Bootstrap
+## Session Bootstrap — MANDATORY
 
-**Read `references/setup.md` first.** It handles prerequisites (playwright-cli binary + skill) and config loading (first run detection, config.yaml creation or reading, coverage check). Skip if already done in this session.
+**You MUST read and execute `references/setup.md` before doing ANYTHING else.** No exploring, no navigating, no browser interaction until setup completes successfully.
+
+Setup installs required prerequisites (`playwright-cli` binary and skill) and loads config. Steps 1-2 are **hard blockers** — if `playwright-cli` is not installed, install it. Do NOT skip, do NOT fall back to MCP tools, Playwright codegen, or any other browser tool. The ONLY way to interact with the browser in this skill is through `playwright-cli`.
+
+Skip only if setup was already completed successfully in this session.
 
 ## Modes
 
@@ -200,7 +204,9 @@ Allowed:
 **If you hit a wall:** document the blocker in `## Blocked` with what would need to change. The user decides whether to modify the source code — the skill never does.
 
 ### Browser
-1. **All browser interaction MUST use `playwright-cli`** — see the `playwright-cli` skill for the full command reference. Never use Playwright codegen, direct scripts, or other browser tools.
+1. **All browser interaction MUST use `playwright-cli`** — the CLI tool installed via `npm install -g @playwright/cli@latest`. See the `playwright-cli` skill for the full command reference.
+2. **NEVER use alternatives** — no Playwright MCP server, no Playwright codegen, no direct Playwright scripts, no `npx playwright`, no browser automation MCP tools. If `playwright-cli` is not available, go back to setup and install it.
+3. **If you catch yourself about to use any other browser tool** — STOP. That means setup was not completed. Run `references/setup.md` steps 1-2.
 
 ### Exploration
 1. **Always read existing maps first** — never re-explore what's documented
