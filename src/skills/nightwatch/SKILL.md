@@ -1,10 +1,10 @@
 ---
-name: e2e-discovery
+name: nightwatch
 description: Use when writing E2E tests for a web app with Playwright, exploring UI to discover test scenarios, or debugging a failing E2E test. Especially useful when the test suite has gaps, the UI is complex, or you need to systematically cartograph pages before testing.
 by: oh-my-skills
 ---
 
-# E2E Discovery — Visual Testing with Persistent Memory
+# Nightwatch — Visual QA with Persistent Memory
 
 Discover tests by exploring the live UI with playwright-cli. Each session enriches a persistent knowledge base in `.discovery/` so the next session starts where the last one left off.
 
@@ -20,20 +20,23 @@ The `.discovery/` directory is the persistent memory. It survives between conver
 
 ## Modes
 
-Four modes. Each has its own reference file with the detailed algorithm. **Read the reference file before starting the mode.**
+Five modes. Each has its own reference file with the detailed algorithm. **Read the reference file before starting the mode.**
 
 | Mode | Trigger | Reference | Description |
 |------|---------|-----------|-------------|
 | **Explore** | "explore [page]" or default | `references/explore.md` | Cartograph a page: open, snapshot, document zones and interactions |
 | **Scenario** | "scenario [page]" | `references/scenario.md` | Design test scenarios from the cartography. No browser needed. |
 | **Test** | "test [scenario]" | `references/test.md` | Generate Playwright test from a scenario. Plays live first. |
-| **Bug** | "bug [description]", "fix [scenario]", "this test is failing" | `references/bug.md` | Full pipeline: reproduce → scenario → test → trace → fix → green |
+| **Bug** | "bug [description]", "fix [scenario]", "this test is failing" | `references/bug.md` | Full pipeline: reproduce, scenario, test, trace, fix, green |
+| **Healthcheck** | "healthcheck" or auto-triggered by setup | `references/healthcheck.md` | Analyze `.discovery/` against skill spec, fix incoherences |
 
 ### Mode Flow
 
-The manual modes are sequential — the user controls transitions. Bug mode is the exception: it runs the full pipeline automatically.
+The manual modes are sequential — the user controls transitions. Bug mode is the exception: it runs the full pipeline automatically. Healthcheck can be invoked at any time, before any mode, to ensure `.discovery/` is coherent with the current skill spec.
 
 ```
+healthcheck ──(run before any mode if incoherence detected)──┐
+                                                              v
 explore → scenario → test
    ^                    |
    └────────────────────┘
@@ -58,15 +61,13 @@ this test is failing ────────────────→ trace �
 
 ```
 {discovery_root}/
-├── config.yaml                   # Project settings (generated on first run)
-├── map/                          # Page cartography
-│   ├── [page-name].md           # One file per page/view
-│   └── [page-name]--[zone].md  # Sub-zones get their own file
-├── scenarios/
-│   ├── _index.md                # Master list with status tracking
-│   └── [scenario-name].md      # One file per scenario
-└── snapshots/
-    └── [page]--[state].yaml     # playwright-cli snapshot output (double dash)
+├── config.yaml
+├── map/
+│   ├── [page-name].md
+│   └── [page-name]--[zone].md
+└── scenarios/
+    ├── _index.md
+    └── [scenario-name].md
 ```
 
 ## File Formats
@@ -78,7 +79,6 @@ this test is failing ────────────────→ trace �
 
 **URL:** /path/to/page
 **Last explored:** YYYY-MM-DD
-**Last validated:** YYYY-MM-DD
 
 ## Layout
 
@@ -96,10 +96,10 @@ One sentence describing the page structure.
 
 ## States
 
-| State | Trigger | Key changes | Snapshot |
-|-------|---------|-------------|----------|
-| default | page load | — | [link](../snapshots/page--default.yaml) |
-| editing | modify any field | title shows "non sauvegardé" | [link](...) |
+| State | Trigger | Key changes |
+|-------|---------|-------------|
+| default | page load | — |
+| editing | modify any field | title shows "non sauvegarde" |
 
 ## Interactions
 
@@ -107,10 +107,6 @@ Checkboxes track what has been explored (not tested — that's in scenarios).
 
 - [x] Click "Noeuds" tab → palette visible with node categories
 - [ ] Drag node from palette → node appears on canvas (needs mock)
-
-## Discovered Scenarios
-
-- [scenario-name](../scenarios/scenario-name.md) — status
 ```
 
 ### Scenario File
@@ -118,10 +114,11 @@ Checkboxes track what has been explored (not tested — that's in scenarios).
 ```markdown
 # Scenario: [Human-readable name]
 
-**Status:** discovered | playing | tested | covered | blocked
+**Status:** discovered | tested | covered | blocked
 **Priority:** critical | high | medium | low
 **Page:** [page-name]
-**Spec file:** (filled when test is written)
+**Domain:** auth
+**Spec:** login-flow
 
 ## Preconditions
 
@@ -144,32 +141,36 @@ Checkboxes track what has been explored (not tested — that's in scenarios).
 Observations, edge cases, blockers found during testing.
 ```
 
+**Stale flag:** `stale` is not a progression state. It is a flag set by the coherence cycle when a page's map changes after a scenario was last validated. A `covered (stale)` scenario still counts in coverage. Only the coherence cycle sets this flag — it is resolved by re-exploring the page.
+
 ### Scenario Index
 
 ```markdown
-# Scenarios
+# Discovery Index
 
-## Coverage Summary
+## Coverage
 
-| Area | Discovered | Tested | Covered |
-|------|-----------|--------|---------|
+| Domain | Pages | Scenarios | Covered | Last explored |
+|--------|-------|-----------|---------|---------------|
 
-## Unexplored Leads
+## Stale
+
+| Scenario | Reason |
+|----------|--------|
+
+## Blocked
 
 | Lead | Blocker | Source |
 |------|---------|--------|
 
-## [Page Name]
+## Scenarios
 
-| Scenario | Status | Priority | Spec |
-|----------|--------|----------|------|
-| [name](./name.md) | discovered | critical | — |
-| [name](./name.md) | covered | high | feature.spec.ts |
+### [domain]
+
+| Scenario | Page | Status | Priority | Spec |
+|----------|------|--------|----------|------|
+| [name](./name.md) | page-name | discovered | critical | -- |
 ```
-
-## Snapshot Management
-
-See `references/snapshots.md` for the full snapshot guide (naming conventions, when to save/skip, how to keep small, freshness rules).
 
 ## Rules
 
@@ -191,12 +192,12 @@ Allowed:
 1. **Mock data files** — create and edit files in `{mocks_dir}`
 2. **Test harness configuration** — modify test-specific infrastructure (Playwright config, test fixtures, MSW handlers, mock server plugins)
 3. **Test helpers** — create shared utilities in `{helpers_dir}`
-4. **Spec files** — create and edit test files in `{test_dir}`
+4. **Spec files** — create and edit test files in the directory resolved from `test_dirs` for the scenario's domain
 5. **Discovery memory** — write to `{discovery_root}` freely
 
 **Why:** Tests must validate what a real user experiences. If a test requires source code changes, the app's public interface is insufficient — that's a design issue to report, not to work around.
 
-**If you hit a wall:** document the blocker in `## Unexplored Leads` with what would need to change. The user decides whether to modify the source code — the skill never does.
+**If you hit a wall:** document the blocker in `## Blocked` with what would need to change. The user decides whether to modify the source code — the skill never does.
 
 ### Browser
 1. **All browser interaction MUST use `playwright-cli`** — see the `playwright-cli` skill for the full command reference. Never use Playwright codegen, direct scripts, or other browser tools.
@@ -224,8 +225,7 @@ Allowed:
 ### Memory
 1. **Never delete map files** — they are cumulative
 2. **Update maps when the UI changes** — mark outdated sections
-3. **Snapshots are replaceable** — re-capture when the UI evolves
-4. **Keep scenario status accurate** — if a test breaks, mark it back to `tested`
+3. **Keep scenario status accurate** — if a test breaks, mark it back to `tested`
 
 ## Troubleshooting
 
