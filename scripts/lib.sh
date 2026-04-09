@@ -75,72 +75,33 @@ print_subtitle() {
     echo -e "  ${DIM}$1${NC}"
 }
 
-# Print a success completion box
+# Internal: draw a bordered box with colored border
+# Usage: _print_box <color> <title_prefix> <title_pad> <title> [body_lines...]
+_print_box() {
+    local color="$1" prefix="$2" title_pad="$3" title="$4"
+    shift 4
+
+    echo ""
+    echo -e "  ${DIM}${color}╭───────────────────────────────────────╮${NC}"
+    echo -e "  ${DIM}${color}│${NC}                                       ${DIM}${color}│${NC}"
+    echo -e "  ${DIM}${color}│${NC}  ${color}${BOLD}${prefix}${title}${NC}$(printf '%*s' $(( title_pad - ${#title} )) '')${DIM}${color}│${NC}"
+
+    while [[ $# -gt 0 ]]; do
+        local line="$1"
+        shift
+        echo -e "  ${DIM}${color}│${NC}  ${DIM}${line}${NC}$(printf '%*s' $(( 37 - ${#line} )) '')${DIM}${color}│${NC}"
+    done
+
+    echo -e "  ${DIM}${color}│${NC}                                       ${DIM}${color}│${NC}"
+    echo -e "  ${DIM}${color}╰───────────────────────────────────────╯${NC}"
+    echo ""
+}
+
+# Public box helpers (preserve existing call signatures and exact padding)
 # Usage: print_success_box "Installation Complete!" "v0.1.3" "Restart your terminal or run:" "source ~/.bashrc"
-print_success_box() {
-    local title="$1"
-    shift
-
-    echo ""
-    echo -e "  ${DIM}${GREEN}╭───────────────────────────────────────╮${NC}"
-    echo -e "  ${DIM}${GREEN}│${NC}                                       ${DIM}${GREEN}│${NC}"
-    echo -e "  ${DIM}${GREEN}│${NC}  ${GREEN}${BOLD}✓ ${title}${NC}$(printf '%*s' $(( 36 - ${#title} )) '')${DIM}${GREEN}│${NC}"
-
-    # Print additional lines
-    while [[ $# -gt 0 ]]; do
-        local line="$1"
-        shift
-        echo -e "  ${DIM}${GREEN}│${NC}  ${DIM}${line}${NC}$(printf '%*s' $(( 37 - ${#line} )) '')${DIM}${GREEN}│${NC}"
-    done
-
-    echo -e "  ${DIM}${GREEN}│${NC}                                       ${DIM}${GREEN}│${NC}"
-    echo -e "  ${DIM}${GREEN}╰───────────────────────────────────────╯${NC}"
-    echo ""
-}
-
-# Print an info completion box (cyan border)
-# Usage: print_info_box "Title" "line1" "line2"
-print_info_box() {
-    local title="$1"
-    shift
-
-    echo ""
-    echo -e "  ${DIM}${CYAN}╭───────────────────────────────────────╮${NC}"
-    echo -e "  ${DIM}${CYAN}│${NC}                                       ${DIM}${CYAN}│${NC}"
-    echo -e "  ${DIM}${CYAN}│${NC}  ${CYAN}${BOLD}${title}${NC}$(printf '%*s' $(( 37 - ${#title} )) '')${DIM}${CYAN}│${NC}"
-
-    while [[ $# -gt 0 ]]; do
-        local line="$1"
-        shift
-        echo -e "  ${DIM}${CYAN}│${NC}  ${DIM}${line}${NC}$(printf '%*s' $(( 37 - ${#line} )) '')${DIM}${CYAN}│${NC}"
-    done
-
-    echo -e "  ${DIM}${CYAN}│${NC}                                       ${DIM}${CYAN}│${NC}"
-    echo -e "  ${DIM}${CYAN}╰───────────────────────────────────────╯${NC}"
-    echo ""
-}
-
-# Print a goodbye box (magenta border)
-# Usage: print_goodbye_box "Title" "line1"
-print_goodbye_box() {
-    local title="$1"
-    shift
-
-    echo ""
-    echo -e "  ${DIM}${MAGENTA}╭───────────────────────────────────────╮${NC}"
-    echo -e "  ${DIM}${MAGENTA}│${NC}                                       ${DIM}${MAGENTA}│${NC}"
-    echo -e "  ${DIM}${MAGENTA}│${NC}  ${MAGENTA}${BOLD}${title}${NC}$(printf '%*s' $(( 37 - ${#title} )) '')${DIM}${MAGENTA}│${NC}"
-
-    while [[ $# -gt 0 ]]; do
-        local line="$1"
-        shift
-        echo -e "  ${DIM}${MAGENTA}│${NC}  ${DIM}${line}${NC}$(printf '%*s' $(( 37 - ${#line} )) '')${DIM}${MAGENTA}│${NC}"
-    done
-
-    echo -e "  ${DIM}${MAGENTA}│${NC}                                       ${DIM}${MAGENTA}│${NC}"
-    echo -e "  ${DIM}${MAGENTA}╰───────────────────────────────────────╯${NC}"
-    echo ""
-}
+print_success_box() { _print_box "$GREEN" "✓ " 36 "$@"; }
+print_info_box()    { _print_box "$CYAN" "" 37 "$@"; }
+print_goodbye_box() { _print_box "$MAGENTA" "" 37 "$@"; }
 
 # ─── Core helpers ─────────────────────────────────────────────────────────────
 
