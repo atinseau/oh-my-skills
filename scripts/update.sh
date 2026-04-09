@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-_OMS_BOOTSTRAP_TAG="" # Bootstrap only — real source of truth is lib.sh; patched by release workflow
+_OMS_BOOTSTRAP_TAG="v0.1.16" # Bootstrap only — real source of truth is lib.sh; patched by release workflow
 
 # Cache configuration
 UPDATE_CACHE_FILE="${HOME}/.oh-my-skills/.update-cache"
