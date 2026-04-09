@@ -4,8 +4,12 @@
 
 set -euo pipefail
 
-DEFAULT_TAG="" # Set by release workflow in tagged installer commits; kept empty on master
+_OMS_BOOTSTRAP_TAG="v0.1.13" # Bootstrap only — real source of truth is lib.sh; patched by release workflow
 
+# ── Bootstrap: load shared library ──────────────────────────────────────────
+# Duplicated across install.sh, uninstall.sh, update.sh (bootstrap problem:
+# need this code to download lib.sh, but lib.sh is what we're downloading).
+# If you change this, update ALL 3 scripts.
 load_lib() {
     if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]%/*}/lib.sh" ]]; then
         # shellcheck source=lib.sh
@@ -15,7 +19,7 @@ load_lib() {
     # Running via curl | bash — download lib.sh from the same release tag
     local _lib_tmp
     _lib_tmp="$(mktemp)"
-    local _base_url="${OMS_LIB_BASE_URL:-https://raw.githubusercontent.com/atinseau/oh-my-skills/${DEFAULT_TAG}/scripts}"
+    local _base_url="${OMS_LIB_BASE_URL:-https://raw.githubusercontent.com/atinseau/oh-my-skills/${_OMS_BOOTSTRAP_TAG}/scripts}"
     curl -fsSL "${_base_url}/lib.sh" -o "$_lib_tmp"
     # shellcheck disable=SC1090
     source "$_lib_tmp"
@@ -24,65 +28,13 @@ load_lib() {
 load_lib
 
 remove_skills() {
-    if [[ ! -f "$REGISTRY_FILE" ]]; then
-        log_warning "No registry found, skipping skill removal"
-        return 0
-    fi
-
-    # Wrappers are files (not directories) that reference ~/.oh-my-skills/skills/
-    # This reference serves as the ownership marker to avoid deleting foreign skills.
-    if command -v jq &> /dev/null; then
-        for path in $(jq -r '.skills.claude[]' "$REGISTRY_FILE" 2>/dev/null); do
-            if [[ -f "$path" ]]; then
-                if grep -q "oh-my-skills/skills/" "$path" 2>/dev/null; then
-                    rm -f "$path"
-                    # Remove parent skill directory if now empty (e.g. .claude/skills/<name>/)
-                    local parent_dir
-                    parent_dir="$(dirname "$path")"
-                    if [[ -d "$parent_dir" ]] && [[ -z "$(ls -A "$parent_dir")" ]]; then
-                        rmdir "$parent_dir"
-                    fi
-                    log_success "Removed Claude wrapper: $(basename "$(dirname "$path")")"
-                fi
-            fi
-        done
-
-        for path in $(jq -r '.skills.copilot[]' "$REGISTRY_FILE" 2>/dev/null); do
-            if [[ -f "$path" ]]; then
-                if grep -q "oh-my-skills/skills/" "$path" 2>/dev/null; then
-                    rm -f "$path"
-                    log_success "Removed Copilot wrapper: $(basename "$path")"
-                fi
-            fi
-        done
-    else
-        # Without jq: grep paths from JSON
-        grep -oE '"(/[^"]+)"' "$REGISTRY_FILE" 2>/dev/null | tr -d '"' | while read -r path; do
-            if [[ -f "$path" ]]; then
-                if grep -q "oh-my-skills/skills/" "$path" 2>/dev/null; then
-                    rm -f "$path"
-                    # Remove parent skill directory if now empty (Claude wrappers use subdirectories)
-                    local parent_dir
-                    parent_dir="$(dirname "$path")"
-                    if [[ -d "$parent_dir" ]] && [[ -z "$(ls -A "$parent_dir")" ]]; then
-                        rmdir "$parent_dir"
-                    fi
-                    log_success "Removed wrapper: $(basename "$path")"
-                fi
-            fi
-        done
-    fi
+    clean_installed_skills --safe
 }
 
 remove_sourcing() {
     local user_shell="$1"
     local shell_config
-
-    if [[ "$user_shell" == "zsh" ]]; then
-        shell_config="$HOME/.zshrc"
-    else
-        shell_config="$HOME/.bashrc"
-    fi
+    shell_config=$(get_shell_config "$user_shell")
 
     if [[ ! -f "$shell_config" ]]; then
         log_warning "$shell_config not found"

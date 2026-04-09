@@ -11,6 +11,12 @@ REGISTRY_FILE="$INSTALL_DIR/registry.json"
 SHELL_FILE="$INSTALL_DIR/shell"
 COMMANDS_DIR="$INSTALL_DIR/commands"
 
+# Source of truth for the current release tag.
+# Note: each script also has a _OMS_BOOTSTRAP_TAG for the curl|bash case
+# (chicken-and-egg: need the tag to download lib.sh, but tag lives here).
+# The release workflow patches both locations.
+DEFAULT_TAG="v0.1.13"
+
 # ─── Colors — AI Neon palette ─────────────────────────────────────────────────
 
 RED='\033[0;31m'
@@ -69,72 +75,33 @@ print_subtitle() {
     echo -e "  ${DIM}$1${NC}"
 }
 
-# Print a success completion box
+# Internal: draw a bordered box with colored border
+# Usage: _print_box <color> <title_prefix> <title_pad> <title> [body_lines...]
+_print_box() {
+    local color="$1" prefix="$2" title_pad="$3" title="$4"
+    shift 4
+
+    echo ""
+    echo -e "  ${DIM}${color}╭───────────────────────────────────────╮${NC}"
+    echo -e "  ${DIM}${color}│${NC}                                       ${DIM}${color}│${NC}"
+    echo -e "  ${DIM}${color}│${NC}  ${color}${BOLD}${prefix}${title}${NC}$(printf '%*s' $(( title_pad - ${#title} )) '')${DIM}${color}│${NC}"
+
+    while [[ $# -gt 0 ]]; do
+        local line="$1"
+        shift
+        echo -e "  ${DIM}${color}│${NC}  ${DIM}${line}${NC}$(printf '%*s' $(( 37 - ${#line} )) '')${DIM}${color}│${NC}"
+    done
+
+    echo -e "  ${DIM}${color}│${NC}                                       ${DIM}${color}│${NC}"
+    echo -e "  ${DIM}${color}╰───────────────────────────────────────╯${NC}"
+    echo ""
+}
+
+# Public box helpers (preserve existing call signatures and exact padding)
 # Usage: print_success_box "Installation Complete!" "v0.1.3" "Restart your terminal or run:" "source ~/.bashrc"
-print_success_box() {
-    local title="$1"
-    shift
-
-    echo ""
-    echo -e "  ${DIM}${GREEN}╭───────────────────────────────────────╮${NC}"
-    echo -e "  ${DIM}${GREEN}│${NC}                                       ${DIM}${GREEN}│${NC}"
-    echo -e "  ${DIM}${GREEN}│${NC}  ${GREEN}${BOLD}✓ ${title}${NC}$(printf '%*s' $(( 36 - ${#title} )) '')${DIM}${GREEN}│${NC}"
-
-    # Print additional lines
-    while [[ $# -gt 0 ]]; do
-        local line="$1"
-        shift
-        echo -e "  ${DIM}${GREEN}│${NC}  ${DIM}${line}${NC}$(printf '%*s' $(( 37 - ${#line} )) '')${DIM}${GREEN}│${NC}"
-    done
-
-    echo -e "  ${DIM}${GREEN}│${NC}                                       ${DIM}${GREEN}│${NC}"
-    echo -e "  ${DIM}${GREEN}╰───────────────────────────────────────╯${NC}"
-    echo ""
-}
-
-# Print an info completion box (cyan border)
-# Usage: print_info_box "Title" "line1" "line2"
-print_info_box() {
-    local title="$1"
-    shift
-
-    echo ""
-    echo -e "  ${DIM}${CYAN}╭───────────────────────────────────────╮${NC}"
-    echo -e "  ${DIM}${CYAN}│${NC}                                       ${DIM}${CYAN}│${NC}"
-    echo -e "  ${DIM}${CYAN}│${NC}  ${CYAN}${BOLD}${title}${NC}$(printf '%*s' $(( 37 - ${#title} )) '')${DIM}${CYAN}│${NC}"
-
-    while [[ $# -gt 0 ]]; do
-        local line="$1"
-        shift
-        echo -e "  ${DIM}${CYAN}│${NC}  ${DIM}${line}${NC}$(printf '%*s' $(( 37 - ${#line} )) '')${DIM}${CYAN}│${NC}"
-    done
-
-    echo -e "  ${DIM}${CYAN}│${NC}                                       ${DIM}${CYAN}│${NC}"
-    echo -e "  ${DIM}${CYAN}╰───────────────────────────────────────╯${NC}"
-    echo ""
-}
-
-# Print a goodbye box (magenta border)
-# Usage: print_goodbye_box "Title" "line1"
-print_goodbye_box() {
-    local title="$1"
-    shift
-
-    echo ""
-    echo -e "  ${DIM}${MAGENTA}╭───────────────────────────────────────╮${NC}"
-    echo -e "  ${DIM}${MAGENTA}│${NC}                                       ${DIM}${MAGENTA}│${NC}"
-    echo -e "  ${DIM}${MAGENTA}│${NC}  ${MAGENTA}${BOLD}${title}${NC}$(printf '%*s' $(( 37 - ${#title} )) '')${DIM}${MAGENTA}│${NC}"
-
-    while [[ $# -gt 0 ]]; do
-        local line="$1"
-        shift
-        echo -e "  ${DIM}${MAGENTA}│${NC}  ${DIM}${line}${NC}$(printf '%*s' $(( 37 - ${#line} )) '')${DIM}${MAGENTA}│${NC}"
-    done
-
-    echo -e "  ${DIM}${MAGENTA}│${NC}                                       ${DIM}${MAGENTA}│${NC}"
-    echo -e "  ${DIM}${MAGENTA}╰───────────────────────────────────────╯${NC}"
-    echo ""
-}
+print_success_box() { _print_box "$GREEN" "✓ " 36 "$@"; }
+print_info_box()    { _print_box "$CYAN" "" 37 "$@"; }
+print_goodbye_box() { _print_box "$MAGENTA" "" 37 "$@"; }
 
 # ─── Core helpers ─────────────────────────────────────────────────────────────
 
@@ -152,6 +119,17 @@ detect_shell() {
         echo "bash"
     else
         echo "bash"
+    fi
+}
+
+# Get the shell config file path for a given shell
+# Usage: get_shell_config "zsh" → /root/.zshrc
+get_shell_config() {
+    local user_shell="$1"
+    if [[ "$user_shell" == "zsh" ]]; then
+        echo "$HOME/.zshrc"
+    else
+        echo "$HOME/.bashrc"
     fi
 }
 
@@ -197,24 +175,58 @@ init_registry() {
     log_success "Registry initialized (v$version)"
 }
 
+# Read all skill paths from the registry (claude + copilot)
+# Usage: registry_read_paths → one path per line
+registry_read_paths() {
+    if [[ ! -f "$REGISTRY_FILE" ]]; then
+        return 0
+    fi
+    if command -v jq &> /dev/null; then
+        jq -r '.skills.claude[]?, .skills.copilot[]?' "$REGISTRY_FILE" 2>/dev/null
+    else
+        grep -oE '"(/[^"]+)"' "$REGISTRY_FILE" 2>/dev/null | tr -d '"'
+    fi
+}
+
+# Write complete skill lists to the registry (replaces init + N appends)
+# Usage: registry_write_skills "claude_path1|claude_path2" "copilot_path1|copilot_path2"
+registry_write_skills() {
+    local claude_paths="$1"
+    local copilot_paths="$2"
+    local version
+    version=$(get_version)
+
+    if command -v jq &> /dev/null; then
+        local claude_json="[]"
+        local copilot_json="[]"
+        if [[ -n "$claude_paths" ]]; then
+            claude_json=$(echo "$claude_paths" | tr '|' '\n' | jq -R . | jq -s .)
+        fi
+        if [[ -n "$copilot_paths" ]]; then
+            copilot_json=$(echo "$copilot_paths" | tr '|' '\n' | jq -R . | jq -s .)
+        fi
+        jq -n --arg v "$version" --argjson c "$claude_json" --argjson p "$copilot_json" \
+            '{"version":$v,"skills":{"claude":$c,"copilot":$p}}' > "$REGISTRY_FILE"
+    else
+        # Without jq: build JSON manually
+        local claude_arr=""
+        if [[ -n "$claude_paths" ]]; then
+            claude_arr=$(echo "$claude_paths" | tr '|' '\n' | sed 's/.*/"&"/' | tr '\n' ',' | sed 's/,$//')
+        fi
+        local copilot_arr=""
+        if [[ -n "$copilot_paths" ]]; then
+            copilot_arr=$(echo "$copilot_paths" | tr '|' '\n' | sed 's/.*/"&"/' | tr '\n' ',' | sed 's/,$//')
+        fi
+        echo "{\"version\":\"$version\",\"skills\":{\"claude\":[${claude_arr}],\"copilot\":[${copilot_arr}]}}" > "$REGISTRY_FILE"
+    fi
+}
+
 # Extract a YAML frontmatter field from a SKILL.md file
 # Usage: extract_frontmatter "field" "file"
 extract_frontmatter() {
     local field="$1"
     local file="$2"
     sed -n "/^---$/,/^---$/{ s/^${field}:[[:space:]]*//p; }" "$file" | head -1
-}
-
-# Generate a Claude wrapper that points to the canonical skill
-generate_claude_wrapper() {
-    local skill_path="$1"
-    local dest="$2"
-
-    cat > "$dest" << WRAPPER
-Follow the instructions in ${skill_path}
-
-Additional user context: \$ARGUMENTS
-WRAPPER
 }
 
 # Generate a Copilot wrapper that points to the canonical skill
@@ -236,6 +248,74 @@ If the user provides additional context, incorporate it.
 WRAPPER
 }
 
+# Remove everything except runtime-required files from the install directory.
+# Called after clone/pull to keep the install directory lean.
+clean_dev_files() {
+    if [[ -z "$INSTALL_DIR" || "$INSTALL_DIR" == "/" || "$INSTALL_DIR" == "$HOME" ]]; then
+        log_warning "Skipping clean_dev_files: INSTALL_DIR is unsafe ('$INSTALL_DIR')"
+        return 0
+    fi
+
+    for entry in "$INSTALL_DIR"/* "$INSTALL_DIR"/.*; do
+        local base
+        base=$(basename "$entry")
+
+        case "$base" in
+            .|..|.git|scripts|skills|commands|shell|registry.json|package.json|.update-cache)
+                continue
+                ;;
+        esac
+
+        rm -rf "$entry"
+    done
+}
+
+# Remove all installed skills (canonical + LLM symlinks/wrappers) for a clean reinstall.
+# Usage: clean_installed_skills [--safe]
+#   --safe: verify each path belongs to oh-my-skills before removing (used by uninstall)
+clean_installed_skills() {
+    local safe=false
+    [[ "${1:-}" == "--safe" ]] && safe=true
+
+    # Remove canonical skills (always safe — it's our directory)
+    if [[ -d "$SKILLS_DIR" ]]; then
+        rm -rf "$SKILLS_DIR"
+    fi
+
+    # Remove LLM wrappers/symlinks tracked by the registry
+    local paths
+    paths=$(registry_read_paths)
+
+    while IFS= read -r path; do
+        [[ -z "$path" ]] && continue
+        local dir
+        dir="$(dirname "$path")"
+
+        if [[ -L "$dir" ]]; then
+            # Symlink (Claude) — verify target if safe mode
+            if [[ "$safe" == true ]] && ! readlink "$dir" | grep -q "oh-my-skills/skills/"; then
+                continue
+            fi
+            rm -f "$dir"
+            if [[ "$safe" == true ]]; then
+                log_success "Removed Claude skill: $(basename "$dir")"
+            fi
+        elif [[ -f "$path" ]]; then
+            # Wrapper file (Copilot or legacy Claude)
+            if [[ "$safe" == true ]] && ! grep -q "oh-my-skills/skills/" "$path" 2>/dev/null; then
+                continue
+            fi
+            rm -f "$path"
+            if [[ -d "$dir" ]] && [[ -z "$(ls -A "$dir")" ]]; then
+                rmdir "$dir"
+            fi
+            if [[ "$safe" == true ]]; then
+                log_success "Removed Copilot wrapper: $(basename "$path")"
+            fi
+        fi
+    done <<< "$paths"
+}
+
 install_skills() {
     local src_skills_dir="$INSTALL_DIR/src/skills"
 
@@ -244,17 +324,15 @@ install_skills() {
         return 0
     fi
 
-    # Reset registry skills (preserve version)
-    local tmp
-    tmp=$(mktemp)
-    if command -v jq &> /dev/null; then
-        jq '.skills = {"claude":[],"copilot":[]}' "$REGISTRY_FILE" > "$tmp" && mv "$tmp" "$REGISTRY_FILE"
-    else
-        echo "{\"version\":\"$(get_version)\",\"skills\":{\"claude\":[],\"copilot\":[]}}" > "$REGISTRY_FILE"
-    fi
+    # Clean slate: read registry to know what to remove, then wipe
+    clean_installed_skills
 
     # Ensure canonical skills directory exists
     mkdir -p "$SKILLS_DIR"
+
+    # Accumulate registry paths (pipe-separated)
+    local claude_paths=""
+    local copilot_paths=""
 
     for skill_dir in "$src_skills_dir"/*/; do
         if [[ ! -d "$skill_dir" ]]; then continue; fi
@@ -263,12 +341,11 @@ install_skills() {
         local skill_name
         skill_name=$(basename "$skill_dir")
 
-        # 1. Copy canonical skill directory to ~/.oh-my-skills/skills/<name>/
+        # 1. Copy canonical skill directory
         local canonical_dir="$SKILLS_DIR/$skill_name"
         local canonical_path="$canonical_dir/SKILL.md"
         mkdir -p "$canonical_dir"
         cp "$skill_dir/SKILL.md" "$canonical_path"
-        # Copy references/ and other subdirectories if present
         for subdir in "$skill_dir"/*/; do
             if [[ -d "$subdir" ]]; then
                 cp -r "$subdir" "$canonical_dir/"
@@ -276,31 +353,25 @@ install_skills() {
         done
         log_success "Installed canonical skill '${CYAN}$skill_name${NC}'"
 
-        # Extract frontmatter for wrapper generation
         local skill_description
         skill_description=$(extract_frontmatter "description" "$canonical_path")
 
-        # 2. Generate LLM-specific wrappers
-        # Claude wrapper
+        # 2. Claude symlink
         if command -v claude &> /dev/null; then
-            local claude_dir="$HOME/.claude/skills/$skill_name"
-            local claude_dest="$claude_dir/SKILL.md"
-            mkdir -p "$claude_dir"
-            generate_claude_wrapper "$canonical_path" "$claude_dest"
-            log_success "Created Claude wrapper '${CYAN}$skill_name${NC}'"
+            local claude_link="$HOME/.claude/skills/$skill_name"
+            mkdir -p "$HOME/.claude/skills"
+            ln -sfn "$canonical_dir" "$claude_link"
+            log_success "Linked Claude skill '${CYAN}$skill_name${NC}'"
 
-            local tmp
-            tmp=$(mktemp)
-            if command -v jq &> /dev/null; then
-                jq --arg p "$claude_dest" '.skills.claude += [$p]' "$REGISTRY_FILE" > "$tmp" && mv "$tmp" "$REGISTRY_FILE"
+            local claude_dest="$claude_link/SKILL.md"
+            if [[ -n "$claude_paths" ]]; then
+                claude_paths="${claude_paths}|${claude_dest}"
             else
-                sed -i.bak "s|\"claude\":\\[|\"claude\":[\"$claude_dest\",|" "$REGISTRY_FILE"
-                sed -i.bak 's/,]/]/' "$REGISTRY_FILE"
-                rm -f "$REGISTRY_FILE.bak"
+                claude_paths="$claude_dest"
             fi
         fi
 
-        # Copilot wrapper
+        # 3. Copilot wrapper
         if command -v copilot &> /dev/null; then
             local copilot_dir="$HOME/.copilot/skills"
             local copilot_dest="$copilot_dir/$skill_name.prompt.md"
@@ -308,17 +379,17 @@ install_skills() {
             generate_copilot_wrapper "$canonical_path" "$skill_name" "$skill_description" "$copilot_dest"
             log_success "Created Copilot wrapper '${CYAN}$skill_name${NC}'"
 
-            local tmp
-            tmp=$(mktemp)
-            if command -v jq &> /dev/null; then
-                jq --arg p "$copilot_dest" '.skills.copilot += [$p]' "$REGISTRY_FILE" > "$tmp" && mv "$tmp" "$REGISTRY_FILE"
+            if [[ -n "$copilot_paths" ]]; then
+                copilot_paths="${copilot_paths}|${copilot_dest}"
             else
-                sed -i.bak "s|\"copilot\":\\[|\"copilot\":[\"$copilot_dest\",|" "$REGISTRY_FILE"
-                sed -i.bak 's/,]/]/' "$REGISTRY_FILE"
-                rm -f "$REGISTRY_FILE.bak"
+                copilot_paths="$copilot_dest"
             fi
         fi
     done
+
+    # Write registry once with all accumulated paths
+    registry_write_skills "$claude_paths" "$copilot_paths"
+    log_success "Registry initialized (v$(get_version))"
 }
 
 install_commands() {
@@ -383,12 +454,7 @@ inject_sourcing() {
     local user_shell="$1"
     local mode="${2:-install}"
     local shell_config
-
-    if [[ "$user_shell" == "zsh" ]]; then
-        shell_config="$HOME/.zshrc"
-    else
-        shell_config="$HOME/.bashrc"
-    fi
+    shell_config=$(get_shell_config "$user_shell")
 
     local source_line="source \"$SHELL_FILE\" # oh-my-skills"
 

@@ -4,8 +4,12 @@
 
 set -euo pipefail
 
-DEFAULT_TAG="" # Set by release workflow in tagged installer commits; kept empty on master
+_OMS_BOOTSTRAP_TAG="v0.1.13" # Bootstrap only — real source of truth is lib.sh; patched by release workflow
 
+# ── Bootstrap: load shared library ──────────────────────────────────────────
+# Duplicated across install.sh, uninstall.sh, update.sh (bootstrap problem:
+# need this code to download lib.sh, but lib.sh is what we're downloading).
+# If you change this, update ALL 3 scripts.
 load_lib() {
     if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]%/*}/lib.sh" ]]; then
         # shellcheck source=lib.sh
@@ -15,7 +19,7 @@ load_lib() {
     # Running via curl | bash — download lib.sh from the same release tag
     local _lib_tmp
     _lib_tmp="$(mktemp)"
-    local _base_url="${OMS_LIB_BASE_URL:-https://raw.githubusercontent.com/atinseau/oh-my-skills/${DEFAULT_TAG}/scripts}"
+    local _base_url="${OMS_LIB_BASE_URL:-https://raw.githubusercontent.com/atinseau/oh-my-skills/${_OMS_BOOTSTRAP_TAG}/scripts}"
     curl -fsSL "${_base_url}/lib.sh" -o "$_lib_tmp"
     # shellcheck disable=SC1090
     source "$_lib_tmp"
@@ -71,11 +75,11 @@ main() {
     clone_repo
 
     print_step "Installing skills..."
-    init_registry
     install_skills
 
     print_step "Installing commands..."
     install_commands
+    clean_dev_files
 
     print_step "Configuring shell..."
     create_shell_sourcing "install"
