@@ -204,6 +204,39 @@ registry_append_path() {
     fi
 }
 
+# Write complete skill lists to the registry (replaces init + N appends)
+# Usage: registry_write_skills "claude_path1|claude_path2" "copilot_path1|copilot_path2"
+registry_write_skills() {
+    local claude_paths="$1"
+    local copilot_paths="$2"
+    local version
+    version=$(get_version)
+
+    if command -v jq &> /dev/null; then
+        local claude_json="[]"
+        local copilot_json="[]"
+        if [[ -n "$claude_paths" ]]; then
+            claude_json=$(echo "$claude_paths" | tr '|' '\n' | jq -R . | jq -s .)
+        fi
+        if [[ -n "$copilot_paths" ]]; then
+            copilot_json=$(echo "$copilot_paths" | tr '|' '\n' | jq -R . | jq -s .)
+        fi
+        jq -n --arg v "$version" --argjson c "$claude_json" --argjson p "$copilot_json" \
+            '{"version":$v,"skills":{"claude":$c,"copilot":$p}}' > "$REGISTRY_FILE"
+    else
+        # Without jq: build JSON manually
+        local claude_arr=""
+        if [[ -n "$claude_paths" ]]; then
+            claude_arr=$(echo "$claude_paths" | tr '|' '\n' | sed 's/.*/"&"/' | tr '\n' ',' | sed 's/,$//')
+        fi
+        local copilot_arr=""
+        if [[ -n "$copilot_paths" ]]; then
+            copilot_arr=$(echo "$copilot_paths" | tr '|' '\n' | sed 's/.*/"&"/' | tr '\n' ',' | sed 's/,$//')
+        fi
+        echo "{\"version\":\"$version\",\"skills\":{\"claude\":[${claude_arr}],\"copilot\":[${copilot_arr}]}}" > "$REGISTRY_FILE"
+    fi
+}
+
 # Extract a YAML frontmatter field from a SKILL.md file
 # Usage: extract_frontmatter "field" "file"
 extract_frontmatter() {
@@ -314,12 +347,15 @@ install_skills() {
         return 0
     fi
 
-    # Clean slate: read registry to know what to remove, then wipe and reinstall
+    # Clean slate: read registry to know what to remove, then wipe
     clean_installed_skills
-    init_registry
 
     # Ensure canonical skills directory exists
     mkdir -p "$SKILLS_DIR"
+
+    # Accumulate registry paths (pipe-separated)
+    local claude_paths=""
+    local copilot_paths=""
 
     for skill_dir in "$src_skills_dir"/*/; do
         if [[ ! -d "$skill_dir" ]]; then continue; fi
@@ -328,12 +364,11 @@ install_skills() {
         local skill_name
         skill_name=$(basename "$skill_dir")
 
-        # 1. Copy canonical skill directory to ~/.oh-my-skills/skills/<name>/
+        # 1. Copy canonical skill directory
         local canonical_dir="$SKILLS_DIR/$skill_name"
         local canonical_path="$canonical_dir/SKILL.md"
         mkdir -p "$canonical_dir"
         cp "$skill_dir/SKILL.md" "$canonical_path"
-        # Copy references/ and other subdirectories if present
         for subdir in "$skill_dir"/*/; do
             if [[ -d "$subdir" ]]; then
                 cp -r "$subdir" "$canonical_dir/"
@@ -341,12 +376,10 @@ install_skills() {
         done
         log_success "Installed canonical skill '${CYAN}$skill_name${NC}'"
 
-        # Extract frontmatter for wrapper generation
         local skill_description
         skill_description=$(extract_frontmatter "description" "$canonical_path")
 
-        # 2. Create LLM-specific links/wrappers
-        # Claude: symlink to canonical skill directory
+        # 2. Claude symlink
         if command -v claude &> /dev/null; then
             local claude_link="$HOME/.claude/skills/$skill_name"
             mkdir -p "$HOME/.claude/skills"
@@ -354,10 +387,14 @@ install_skills() {
             log_success "Linked Claude skill '${CYAN}$skill_name${NC}'"
 
             local claude_dest="$claude_link/SKILL.md"
-            registry_append_path "claude" "$claude_dest"
+            if [[ -n "$claude_paths" ]]; then
+                claude_paths="${claude_paths}|${claude_dest}"
+            else
+                claude_paths="$claude_dest"
+            fi
         fi
 
-        # Copilot: wrapper file (needs specific YAML frontmatter)
+        # 3. Copilot wrapper
         if command -v copilot &> /dev/null; then
             local copilot_dir="$HOME/.copilot/skills"
             local copilot_dest="$copilot_dir/$skill_name.prompt.md"
@@ -365,9 +402,17 @@ install_skills() {
             generate_copilot_wrapper "$canonical_path" "$skill_name" "$skill_description" "$copilot_dest"
             log_success "Created Copilot wrapper '${CYAN}$skill_name${NC}'"
 
-            registry_append_path "copilot" "$copilot_dest"
+            if [[ -n "$copilot_paths" ]]; then
+                copilot_paths="${copilot_paths}|${copilot_dest}"
+            else
+                copilot_paths="$copilot_dest"
+            fi
         fi
     done
+
+    # Write registry once with all accumulated paths
+    registry_write_skills "$claude_paths" "$copilot_paths"
+    log_success "Registry initialized (v$(get_version))"
 }
 
 install_commands() {
