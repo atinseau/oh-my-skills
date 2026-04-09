@@ -10,6 +10,10 @@ _OMS_BOOTSTRAP_TAG="v0.1.13" # Bootstrap only — real source of truth is lib.sh
 UPDATE_CACHE_FILE="${HOME}/.oh-my-skills/.update-cache"
 UPDATE_CACHE_TTL="${OMS_UPDATE_CACHE_TTL:-86400}" # 24 hours in seconds
 
+# ── Bootstrap: load shared library ──────────────────────────────────────────
+# Duplicated across install.sh, uninstall.sh, update.sh (bootstrap problem:
+# need this code to download lib.sh, but lib.sh is what we're downloading).
+# If you change this, update ALL 3 scripts.
 load_lib() {
     if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]%/*}/lib.sh" ]]; then
         # shellcheck source=lib.sh
