@@ -62,9 +62,9 @@ get_local_version() {
 }
 
 get_remote_version() {
-    # Fetch latest tag from remote, strip v prefix to normalize
     local raw
-    raw=$(git ls-remote --tags "$REPO_URL" 2>/dev/null | grep -oE 'refs/tags/v?[0-9.]+$' | sed 's|refs/tags/||' | sort -V | tail -1)
+    raw=$(git ls-remote --tags "$REPO_URL" 2>/dev/null \
+        | sed -n 's|.*refs/tags/\(v\?[0-9.]*\)$|\1|p' | sort -V | tail -1)
     # Strip leading v for consistent comparison
     echo "${raw#v}"
 }
@@ -86,11 +86,8 @@ read_cache() {
     if [[ ! -f "$UPDATE_CACHE_FILE" ]]; then
         return 1
     fi
-    local content
-    content=$(cat "$UPDATE_CACHE_FILE" 2>/dev/null) || return 1
     local ts version
-    ts=$(echo "$content" | awk '{print $1}')
-    version=$(echo "$content" | awk '{print $2}')
+    read -r ts version < "$UPDATE_CACHE_FILE" || return 1
     if [[ -z "$ts" || -z "$version" ]]; then
         return 1
     fi
@@ -101,8 +98,8 @@ read_cache() {
 is_cache_fresh() {
     local cache_data
     cache_data=$(read_cache) || return 1
-    local ts
-    ts=$(echo "$cache_data" | awk '{print $1}')
+    local ts _version
+    read -r ts _version <<< "$cache_data"
     local now
     now=$(date +%s)
     local age=$(( now - ts ))
@@ -113,7 +110,9 @@ is_cache_fresh() {
 get_cached_remote_version() {
     local cache_data
     cache_data=$(read_cache) || { echo ""; return; }
-    echo "$cache_data" | awk '{print $2}'
+    local _ts version
+    read -r _ts version <<< "$cache_data"
+    echo "$version"
 }
 
 # Invalidate the cache (force re-fetch on next shell open)
@@ -163,12 +162,14 @@ update_repo() {
     local new_version="$1"
 
     cd "$INSTALL_DIR"
-    git checkout "v${new_version}" 2>/dev/null || git checkout "origin/master" 2>/dev/null || {
+    if git checkout "v${new_version}" 2>/dev/null; then
+        log_success "Repository updated to ${CYAN}v${new_version}${NC}"
+    elif git checkout "origin/master" 2>/dev/null; then
+        log_warning "Tag v${new_version} not found, fell back to origin/master"
+    else
         log_error "Failed to checkout v${new_version} or origin/master"
         return 1
-    }
-
-    log_success "Repository updated to ${CYAN}$new_version${NC}"
+    fi
 }
 
 apply_update() {

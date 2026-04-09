@@ -267,29 +267,22 @@ WRAPPER
 # Remove everything except runtime-required files from the install directory.
 # Called after clone/pull to keep the install directory lean.
 clean_dev_files() {
-    # Safety: abort if INSTALL_DIR is empty or root-like
     if [[ -z "$INSTALL_DIR" || "$INSTALL_DIR" == "/" || "$INSTALL_DIR" == "$HOME" ]]; then
         log_warning "Skipping clean_dev_files: INSTALL_DIR is unsafe ('$INSTALL_DIR')"
         return 0
     fi
 
-    # Allowlist: only these top-level entries are needed at runtime.
-    # src/ is intentionally excluded — consumed by install_skills/install_commands before this runs.
-    local -a keep=(.git scripts skills commands shell registry.json package.json .update-cache)
-
     for entry in "$INSTALL_DIR"/* "$INSTALL_DIR"/.*; do
         local base
         base=$(basename "$entry")
-        [[ "$base" == "." || "$base" == ".." ]] && continue
 
-        local allowed=0
-        for k in "${keep[@]}"; do
-            [[ "$base" == "$k" ]] && { allowed=1; break; }
-        done
+        case "$base" in
+            .|..|.git|scripts|skills|commands|shell|registry.json|package.json|.update-cache)
+                continue
+                ;;
+        esac
 
-        if [[ $allowed -eq 0 ]]; then
-            rm -rf "$entry"
-        fi
+        rm -rf "$entry"
     done
 }
 
