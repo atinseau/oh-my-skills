@@ -25,7 +25,10 @@
 			"Bash(git push:*)",
 			"Bash(git ls-tree:*)",
 			"Bash(git ls-remote:*)",
-			"Bash(grep -oE 'refs/tags/v?[0-9.]+$')"
+			"Bash(grep -oE 'refs/tags/v?[0-9.]+$')",
+			"Bash(cp /Users/arthur/Documents/Dev/projects/oh-my-skills/scripts/update.sh ~/.oh-my-skills/scripts/update.sh)",
+			"Bash(cp /Users/arthur/Documents/Dev/projects/oh-my-skills/scripts/lib.sh ~/.oh-my-skills/scripts/lib.sh)",
+			"Bash(cp /Users/arthur/Documents/Dev/projects/oh-my-skills/scripts/install.sh ~/.oh-my-skills/scripts/install.sh)"
 		]
 	},
 	"enabledPlugins": {

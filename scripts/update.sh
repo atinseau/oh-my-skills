@@ -166,6 +166,12 @@ update_repo() {
     local new_version="$1"
 
     cd "$INSTALL_DIR"
+
+    # Reset working tree before checkout — clean_dev_files deletes tracked files
+    # (src/, tests/, etc.) between updates, and manual patches to scripts/ would
+    # block checkout. This ensures a clean slate for the tag switch.
+    git checkout -- . 2>/dev/null
+
     if git checkout "v${new_version}" 2>/dev/null; then
         log_success "Repository updated to ${CYAN}v${new_version}${NC}"
     elif git checkout "origin/master" 2>/dev/null; then
@@ -174,10 +180,6 @@ update_repo() {
         log_error "Failed to checkout v${new_version} or origin/master"
         return 1
     fi
-
-    # Restore working tree — clean_dev_files deletes tracked files (src/, tests/, etc.)
-    # between updates, so git checkout alone won't restore them if HEAD didn't change.
-    git checkout -- . 2>/dev/null
 }
 
 apply_update() {
