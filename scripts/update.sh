@@ -174,6 +174,10 @@ update_repo() {
         log_error "Failed to checkout v${new_version} or origin/master"
         return 1
     fi
+
+    # Restore working tree — clean_dev_files deletes tracked files (src/, tests/, etc.)
+    # between updates, so git checkout alone won't restore them if HEAD didn't change.
+    git checkout -- . 2>/dev/null
 }
 
 apply_update() {
