@@ -39,14 +39,14 @@ TESTCONTAINERS_RYUK_DISABLED=true bun test tests/install.test.ts
 Skills follow a **single source of truth** pattern to avoid drift across LLM tools:
 
 1. **Canonical skill** — `~/.oh-my-skills/skills/<name>/` directory (copied from `src/skills/<name>/`). Entry point is always `SKILL.md`; skills may include subdirectories (e.g. `references/`).
-2. **LLM wrappers** — Lightweight files (2–8 lines) that redirect to the canonical skill:
-   - **Claude**: `~/.claude/skills/<name>/SKILL.md` — contains `Follow the instructions in <canonical-path>` + `$ARGUMENTS`
-   - **Copilot**: `~/.copilot/skills/<name>.prompt.md` — contains YAML frontmatter (`mode`, `description`) + a link to the canonical skill
-3. **Adding a new LLM** — Create a wrapper in the tool's native format pointing to the canonical skill. Zero logic duplication.
+2. **LLM links/wrappers** — Point to the canonical skill:
+   - **Claude**: `~/.claude/skills/<name>` — **symlink** to the canonical skill directory. Claude reads the SKILL.md directly through the symlink.
+   - **Copilot**: `~/.copilot/skills/<name>.prompt.md` — wrapper file with YAML frontmatter (`mode`, `description`) + a link to the canonical skill (symlink not possible due to required frontmatter).
+3. **Adding a new LLM** — Prefer symlinks when the tool reads SKILL.md natively. Use a wrapper only when the tool requires a specific format (e.g. Copilot frontmatter).
 
 ### Registry (`~/.oh-my-skills/registry.json`)
 
-Tracks installed **LLM wrapper file** paths. Uninstall verifies ownership by checking that each wrapper references `oh-my-skills/skills/` before deleting it. Example: `{"version":"0.1.0","skills":{"claude":["/root/.claude/skills/git-pr-flow/SKILL.md"],"copilot":[...]}}`
+Tracks installed **LLM skill paths** (symlinks and wrappers). Used by `install_skills` for clean reinstall (read → remove old → reset → install fresh) and by `uninstall.sh` for removal. Example: `{"version":"0.1.0","skills":{"claude":["/root/.claude/skills/git-pr-flow/SKILL.md"],"copilot":[...]}}`
 
 ### Source content (`src/`)
 
