@@ -233,7 +233,8 @@ clean_dev_files() {
         return 0
     fi
 
-    # Allowlist: only these top-level entries are needed at runtime
+    # Allowlist: only these top-level entries are needed at runtime.
+    # src/ is intentionally excluded — consumed by install_skills/install_commands before this runs.
     local -a keep=(.git scripts skills commands shell registry.json package.json .update-cache)
 
     for entry in "$INSTALL_DIR"/* "$INSTALL_DIR"/.*; do
@@ -259,12 +260,16 @@ clean_installed_skills() {
         rm -rf "$SKILLS_DIR"
     fi
 
-    # Remove Claude symlinks that point to oh-my-skills (including dangling ones)
+    # Remove Claude skills owned by oh-my-skills (symlinks or legacy wrapper directories)
     local claude_skills_dir="$HOME/.claude/skills"
     if [[ -d "$claude_skills_dir" ]]; then
         for entry in "$claude_skills_dir"/*; do
             if [[ -L "$entry" ]] && readlink "$entry" | grep -q "oh-my-skills/skills/"; then
+                # Current format: symlink to canonical dir
                 rm -f "$entry"
+            elif [[ -d "$entry" && -f "$entry/SKILL.md" ]] && grep -q "oh-my-skills/skills/" "$entry/SKILL.md" 2>/dev/null; then
+                # Legacy format: wrapper directory containing redirect file
+                rm -rf "$entry"
             fi
         done
     fi

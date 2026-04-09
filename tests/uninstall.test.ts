@@ -91,11 +91,11 @@ describe("oh-my-skills Uninstall (real script)", () => {
 		if (container) await container.stop();
 	});
 
-	it("should have installed wrappers before uninstall", () => {
-		// Claude wrapper should be a file (not a directory)
+	it("should have installed skills before uninstall", () => {
+		// Claude skill should be a symlink
 		const claude = exec(
 			id,
-			`test -f ${HOME}/.claude/skills/test-skill/SKILL.md && echo ok`,
+			`test -L ${HOME}/.claude/skills/test-skill && echo ok`,
 		);
 		expect(claude.output).toBe("ok");
 
@@ -120,10 +120,10 @@ describe("oh-my-skills Uninstall (real script)", () => {
 		expect(r.output).toContain("Uninstallation Complete");
 	});
 
-	it("should have removed Claude wrapper for test-skill", () => {
+	it("should have removed Claude symlink for test-skill", () => {
 		const r = exec(
 			id,
-			`test -f ${HOME}/.claude/skills/test-skill/SKILL.md && echo exists || echo gone`,
+			`test -L ${HOME}/.claude/skills/test-skill && echo exists || echo gone`,
 		);
 		expect(r.output).toBe("gone");
 	});
