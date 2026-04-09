@@ -161,6 +161,17 @@ detect_shell() {
     fi
 }
 
+# Get the shell config file path for a given shell
+# Usage: get_shell_config "zsh" → /root/.zshrc
+get_shell_config() {
+    local user_shell="$1"
+    if [[ "$user_shell" == "zsh" ]]; then
+        echo "$HOME/.zshrc"
+    else
+        echo "$HOME/.bashrc"
+    fi
+}
+
 detect_llms() {
     local found=false
 
@@ -437,12 +448,7 @@ inject_sourcing() {
     local user_shell="$1"
     local mode="${2:-install}"
     local shell_config
-
-    if [[ "$user_shell" == "zsh" ]]; then
-        shell_config="$HOME/.zshrc"
-    else
-        shell_config="$HOME/.bashrc"
-    fi
+    shell_config=$(get_shell_config "$user_shell")
 
     local source_line="source \"$SHELL_FILE\" # oh-my-skills"
 

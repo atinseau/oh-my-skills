@@ -83,12 +83,7 @@ remove_skills() {
 remove_sourcing() {
     local user_shell="$1"
     local shell_config
-
-    if [[ "$user_shell" == "zsh" ]]; then
-        shell_config="$HOME/.zshrc"
-    else
-        shell_config="$HOME/.bashrc"
-    fi
+    shell_config=$(get_shell_config "$user_shell")
 
     if [[ ! -f "$shell_config" ]]; then
         log_warning "$shell_config not found"
