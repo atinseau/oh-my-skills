@@ -188,22 +188,6 @@ registry_read_paths() {
     fi
 }
 
-# Append a skill path to the registry for a given LLM
-# Usage: registry_append_path "claude" "/path/to/SKILL.md"
-registry_append_path() {
-    local llm="$1"
-    local path="$2"
-    local tmp
-    tmp=$(mktemp)
-    if command -v jq &> /dev/null; then
-        jq --arg p "$path" ".skills.${llm} += [\$p]" "$REGISTRY_FILE" > "$tmp" && mv "$tmp" "$REGISTRY_FILE"
-    else
-        sed -i.bak "s|\"${llm}\":\\[|\"${llm}\":[\"${path}\",|" "$REGISTRY_FILE"
-        sed -i.bak 's/,]/]/' "$REGISTRY_FILE"
-        rm -f "$REGISTRY_FILE.bak"
-    fi
-}
-
 # Write complete skill lists to the registry (replaces init + N appends)
 # Usage: registry_write_skills "claude_path1|claude_path2" "copilot_path1|copilot_path2"
 registry_write_skills() {
