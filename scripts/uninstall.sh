@@ -29,20 +29,24 @@ remove_skills() {
         return 0
     fi
 
-    # Wrappers are files (not directories) that reference ~/.oh-my-skills/skills/
-    # This reference serves as the ownership marker to avoid deleting foreign skills.
+    # Claude skills are symlinks pointing to ~/.oh-my-skills/skills/
+    # Copilot skills are wrapper files referencing ~/.oh-my-skills/skills/
     if command -v jq &> /dev/null; then
         for path in $(jq -r '.skills.claude[]' "$REGISTRY_FILE" 2>/dev/null); do
-            if [[ -f "$path" ]]; then
+            local skill_dir
+            skill_dir="$(dirname "$path")"
+            # Check if it's a symlink to oh-my-skills
+            if [[ -L "$skill_dir" ]] && readlink "$skill_dir" | grep -q "oh-my-skills/skills/"; then
+                rm -f "$skill_dir"
+                log_success "Removed Claude skill: $(basename "$skill_dir")"
+            elif [[ -f "$path" ]]; then
+                # Legacy wrapper file fallback
                 if grep -q "oh-my-skills/skills/" "$path" 2>/dev/null; then
                     rm -f "$path"
-                    # Remove parent skill directory if now empty (e.g. .claude/skills/<name>/)
-                    local parent_dir
-                    parent_dir="$(dirname "$path")"
-                    if [[ -d "$parent_dir" ]] && [[ -z "$(ls -A "$parent_dir")" ]]; then
-                        rmdir "$parent_dir"
+                    if [[ -d "$skill_dir" ]] && [[ -z "$(ls -A "$skill_dir")" ]]; then
+                        rmdir "$skill_dir"
                     fi
-                    log_success "Removed Claude wrapper: $(basename "$(dirname "$path")")"
+                    log_success "Removed Claude wrapper: $(basename "$skill_dir")"
                 fi
             fi
         done
@@ -58,14 +62,16 @@ remove_skills() {
     else
         # Without jq: grep paths from JSON
         grep -oE '"(/[^"]+)"' "$REGISTRY_FILE" 2>/dev/null | tr -d '"' | while read -r path; do
-            if [[ -f "$path" ]]; then
+            local entry_dir
+            entry_dir="$(dirname "$path")"
+            if [[ -L "$entry_dir" ]] && readlink "$entry_dir" | grep -q "oh-my-skills/skills/"; then
+                rm -f "$entry_dir"
+                log_success "Removed skill: $(basename "$entry_dir")"
+            elif [[ -f "$path" ]]; then
                 if grep -q "oh-my-skills/skills/" "$path" 2>/dev/null; then
                     rm -f "$path"
-                    # Remove parent skill directory if now empty (Claude wrappers use subdirectories)
-                    local parent_dir
-                    parent_dir="$(dirname "$path")"
-                    if [[ -d "$parent_dir" ]] && [[ -z "$(ls -A "$parent_dir")" ]]; then
-                        rmdir "$parent_dir"
+                    if [[ -d "$entry_dir" ]] && [[ -z "$(ls -A "$entry_dir")" ]]; then
+                        rmdir "$entry_dir"
                     fi
                     log_success "Removed wrapper: $(basename "$path")"
                 fi

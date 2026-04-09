@@ -96,23 +96,24 @@ describe("oh-my-skills install.sh (e2e)", () => {
 		expect(content.output).toContain("Say hello nicely.");
 	});
 
-	it("should generate Claude wrapper pointing to canonical skill", () => {
-		const r = exec(
+	it("should create Claude symlink pointing to canonical skill", () => {
+		// Should be a symlink
+		const isLink = exec(
 			id,
-			`test -f ${HOME}/.claude/skills/greeting-skill/SKILL.md && echo ok`,
+			`test -L ${HOME}/.claude/skills/greeting-skill && echo ok`,
 		);
-		expect(r.output).toBe("ok");
+		expect(isLink.output).toBe("ok");
 
+		// Symlink target should be the canonical dir
+		const target = exec(id, `readlink ${HOME}/.claude/skills/greeting-skill`);
+		expect(target.output).toContain("oh-my-skills/skills/greeting-skill");
+
+		// Content should be readable through the symlink
 		const content = exec(
 			id,
 			`cat ${HOME}/.claude/skills/greeting-skill/SKILL.md`,
 		);
-		expect(content.output).toContain(
-			"oh-my-skills/skills/greeting-skill/SKILL.md",
-		);
-		expect(content.output).toContain("$ARGUMENTS");
-		// Wrapper should NOT contain the full skill content
-		expect(content.output).not.toContain("Say hello nicely.");
+		expect(content.output).toContain("Say hello nicely.");
 	});
 
 	it("should fail fast when git is not installed", () => {
@@ -168,14 +169,14 @@ describe("oh-my-skills install.sh (e2e)", () => {
 		expect(r.output).toContain("update");
 	});
 
-	describe("orphan skill cleanup", () => {
+	describe("clean reinstall", () => {
 		it("should remove skills deleted from the repo on reinstall", () => {
 			// Verify greeting-skill is installed from previous tests
 			expect(
 				exec(id, `test -d ${INSTALL}/skills/greeting-skill && echo ok`).output,
 			).toBe("ok");
 			expect(
-				exec(id, `test -d ${HOME}/.claude/skills/greeting-skill && echo ok`)
+				exec(id, `test -L ${HOME}/.claude/skills/greeting-skill && echo ok`)
 					.output,
 			).toBe("ok");
 
@@ -186,9 +187,8 @@ describe("oh-my-skills install.sh (e2e)", () => {
 			// Reinstall over existing install dir
 			const r = exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/install.sh`);
 			expect(r.exitCode).toBe(0);
-			expect(r.output).toContain("Removed orphan skill");
 
-			// Canonical skill should be gone
+			// Canonical skill should be gone (full clean + reinstall with empty src)
 			expect(
 				exec(
 					id,
@@ -196,28 +196,32 @@ describe("oh-my-skills install.sh (e2e)", () => {
 				).output,
 			).toBe("gone");
 
-			// Claude wrapper should be gone too
+			// Claude symlink should be gone too
 			expect(
 				exec(
 					id,
-					`test -d ${HOME}/.claude/skills/greeting-skill && echo exists || echo gone`,
+					`test -L ${HOME}/.claude/skills/greeting-skill && echo exists || echo gone`,
 				).output,
 			).toBe("gone");
 		});
 
-		it("should remove legacy flat skill files on install", () => {
-			// Simulate a legacy flat file left from an old version
-			exec(id, `printf 'legacy content' > ${INSTALL}/skills/old-skill.md`);
+		it("should remove legacy flat skill files on reinstall", () => {
+			// Restore greeting-skill first, then add a legacy file
+			exec(id, `mkdir -p ${INSTALL}/src/skills/greeting-skill`);
+			exec(
+				id,
+				`cp /tmp/remote-repo/src/skills/greeting-skill/SKILL.md ${INSTALL}/src/skills/greeting-skill/SKILL.md`,
+			);
+			// Create a legacy flat file that shouldn't survive reinstall
+			exec(
+				id,
+				`mkdir -p ${INSTALL}/skills && printf 'legacy' > ${INSTALL}/skills/old-skill.md`,
+			);
 
-			// Ensure src/skills exists (cleaned by clean_dev_files)
-			exec(id, `mkdir -p ${INSTALL}/src/skills`);
-
-			// Reinstall over existing
 			const r = exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/install.sh`);
 			expect(r.exitCode).toBe(0);
-			expect(r.output).toContain("Removed legacy skill file");
 
-			// Legacy file should be cleaned up
+			// Legacy file should be gone (skills dir was fully recreated)
 			expect(
 				exec(
 					id,

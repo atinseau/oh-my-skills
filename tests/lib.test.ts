@@ -279,25 +279,27 @@ describe("lib.sh unit tests", () => {
 			expect(content.output).toContain("by: oh-my-skills");
 		});
 
-		it("generates Claude wrapper and updates registry", () => {
+		it("creates Claude symlink and updates registry", () => {
 			exec(id, `rm -rf ${HOME}/.claude/skills`);
 			lib(id, `init_registry && install_skills`);
 
-			const wrapper = exec(
+			// Should be a symlink
+			const isLink = exec(
 				id,
-				`test -f ${HOME}/.claude/skills/hello-skill/SKILL.md && echo ok`,
+				`test -L ${HOME}/.claude/skills/hello-skill && echo ok`,
 			);
-			expect(wrapper.output).toBe("ok");
+			expect(isLink.output).toBe("ok");
 
-			// Wrapper should point to canonical skill, not contain full content
+			// Symlink target should be the canonical dir
+			const target = exec(id, `readlink ${HOME}/.claude/skills/hello-skill`);
+			expect(target.output).toContain("oh-my-skills/skills/hello-skill");
+
+			// Content readable through symlink
 			const content = exec(
 				id,
 				`cat ${HOME}/.claude/skills/hello-skill/SKILL.md`,
 			);
-			expect(content.output).toContain(
-				"oh-my-skills/skills/hello-skill/SKILL.md",
-			);
-			expect(content.output).toContain("$ARGUMENTS");
+			expect(content.output).toContain("by: oh-my-skills");
 
 			const r = exec(id, `cat ${INSTALL}/registry.json`);
 			const registry = JSON.parse(r.output);

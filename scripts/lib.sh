@@ -205,18 +205,6 @@ extract_frontmatter() {
     sed -n "/^---$/,/^---$/{ s/^${field}:[[:space:]]*//p; }" "$file" | head -1
 }
 
-# Generate a Claude wrapper that points to the canonical skill
-generate_claude_wrapper() {
-    local skill_path="$1"
-    local dest="$2"
-
-    cat > "$dest" << WRAPPER
-Follow the instructions in ${skill_path}
-
-Additional user context: \$ARGUMENTS
-WRAPPER
-}
-
 # Generate a Copilot wrapper that points to the canonical skill
 generate_copilot_wrapper() {
     local skill_path="$1"
@@ -264,51 +252,33 @@ clean_dev_files() {
     done
 }
 
-# Remove skills from ~/.oh-my-skills/skills/ that no longer exist in src/skills/.
-# Also removes their LLM wrappers (Claude/Copilot).
-clean_orphan_skills() {
-    local src_skills_dir="$1"
+# Remove all installed skills (canonical + LLM symlinks/wrappers) for a clean reinstall.
+clean_installed_skills() {
+    # Remove canonical skills
+    if [[ -d "$SKILLS_DIR" ]]; then
+        rm -rf "$SKILLS_DIR"
+    fi
 
-    [[ ! -d "$SKILLS_DIR" ]] && return 0
-
-    # Build list of valid skill names from source
-    local -a valid_names=()
-    for skill_dir in "$src_skills_dir"/*/; do
-        [[ ! -d "$skill_dir" ]] && continue
-        [[ ! -f "$skill_dir/SKILL.md" ]] && continue
-        valid_names+=("$(basename "$skill_dir")")
-    done
-
-    # Check installed skill directories
-    for installed in "$SKILLS_DIR"/*/; do
-        [[ ! -d "$installed" ]] && continue
-        local name
-        name=$(basename "$installed")
-        local found=0
-        for v in "${valid_names[@]}"; do
-            [[ "$v" == "$name" ]] && { found=1; break; }
+    # Remove Claude symlinks that point to oh-my-skills (including dangling ones)
+    local claude_skills_dir="$HOME/.claude/skills"
+    if [[ -d "$claude_skills_dir" ]]; then
+        for entry in "$claude_skills_dir"/*; do
+            if [[ -L "$entry" ]] && readlink "$entry" | grep -q "oh-my-skills/skills/"; then
+                rm -f "$entry"
+            fi
         done
-        if [[ $found -eq 0 && -n "$name" ]]; then
-            rm -rf "$installed"
-            # Remove LLM wrappers
-            rm -rf "$HOME/.claude/skills/$name"
-            rm -f "$HOME/.copilot/skills/$name.prompt.md"
-            log_success "Removed orphan skill '${CYAN}$name${NC}'"
-        fi
-    done
+    fi
 
-    # Clean up legacy flat files (old format: skills/<name>.md instead of skills/<name>/SKILL.md)
-    for installed_file in "$SKILLS_DIR"/*.md; do
-        [[ ! -f "$installed_file" ]] && continue
-        local name
-        name=$(basename "$installed_file" .md)
-        [[ -z "$name" ]] && continue
-        rm -f "$installed_file"
-        # Remove LLM wrappers for legacy flat skills
-        rm -rf "$HOME/.claude/skills/$name"
-        rm -f "$HOME/.copilot/skills/$name.prompt.md"
-        log_success "Removed legacy skill file '${CYAN}$name${NC}'"
-    done
+    # Remove Copilot wrappers that reference oh-my-skills
+    local copilot_skills_dir="$HOME/.copilot/skills"
+    if [[ -d "$copilot_skills_dir" ]]; then
+        for f in "$copilot_skills_dir"/*.prompt.md; do
+            [[ ! -f "$f" ]] && continue
+            if grep -q "oh-my-skills/skills/" "$f" 2>/dev/null; then
+                rm -f "$f"
+            fi
+        done
+    fi
 }
 
 install_skills() {
@@ -319,8 +289,8 @@ install_skills() {
         return 0
     fi
 
-    # Clean up skills that were removed from the repo
-    clean_orphan_skills "$src_skills_dir"
+    # Clean slate: remove all previously installed skills
+    clean_installed_skills
 
     # Reset registry skills (preserve version)
     local tmp
@@ -358,17 +328,17 @@ install_skills() {
         local skill_description
         skill_description=$(extract_frontmatter "description" "$canonical_path")
 
-        # 2. Generate LLM-specific wrappers
-        # Claude wrapper
+        # 2. Create LLM-specific links/wrappers
+        # Claude: symlink to canonical skill directory
         if command -v claude &> /dev/null; then
-            local claude_dir="$HOME/.claude/skills/$skill_name"
-            local claude_dest="$claude_dir/SKILL.md"
-            mkdir -p "$claude_dir"
-            generate_claude_wrapper "$canonical_path" "$claude_dest"
-            log_success "Created Claude wrapper '${CYAN}$skill_name${NC}'"
+            local claude_link="$HOME/.claude/skills/$skill_name"
+            mkdir -p "$HOME/.claude/skills"
+            ln -sfn "$canonical_dir" "$claude_link"
+            log_success "Linked Claude skill '${CYAN}$skill_name${NC}'"
 
             local tmp
             tmp=$(mktemp)
+            local claude_dest="$claude_link/SKILL.md"
             if command -v jq &> /dev/null; then
                 jq --arg p "$claude_dest" '.skills.claude += [$p]' "$REGISTRY_FILE" > "$tmp" && mv "$tmp" "$REGISTRY_FILE"
             else
@@ -378,7 +348,7 @@ install_skills() {
             fi
         fi
 
-        # Copilot wrapper
+        # Copilot: wrapper file (needs specific YAML frontmatter)
         if command -v copilot &> /dev/null; then
             local copilot_dir="$HOME/.copilot/skills"
             local copilot_dest="$copilot_dir/$skill_name.prompt.md"
