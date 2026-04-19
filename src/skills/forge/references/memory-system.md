@@ -74,6 +74,9 @@ updated: 2026-04-18
 
 # Index
 
+Profiles: [swiftui, typescript]
+Last session: 2026-04-18-oauth2-login
+
 ## Modules
 - auth — `src/auth/` — keywords: jwt, session, login
 - api-client — `src/api/` — keywords: http, retry, timeout
