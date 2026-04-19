@@ -61,7 +61,7 @@ test("full pipeline returns relevant results") {
 }
 ```
 
-Use an in-memory or ephemeral store — never hit the real database or network.
+Use an in-memory or ephemeral store — never hit the real database or network. (This applies to unit and integration tests. QA flows under `.forge/qa/` may legitimately exercise real infrastructure when the strategy calls for it.)
 
 ## Performance tests
 

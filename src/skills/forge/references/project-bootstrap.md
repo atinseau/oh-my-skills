@@ -162,7 +162,7 @@ Written in Phase 4. Uses template at `skills/forge/templates/module.md`.
 
 ```markdown
 ---
-by: forge
+type: pitfalls
 ---
 ```
 

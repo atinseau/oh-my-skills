@@ -95,6 +95,9 @@ created: YYYY-MM-DD
 ## Fix
 {What was changed and why}
 
+## Verification
+{How we confirmed the fix: reference the reproduction test and, if relevant, the QA flow used.}
+
 ## Lesson
 {Pattern to avoid in the future}
 ```

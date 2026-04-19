@@ -7,6 +7,7 @@
 ```
 .forge/
 ├── index.md                          # Table of contents (max 100 lines, derived)
+├── config.md                         # Active profiles + resolved commands + bootstrap reasoning
 ├── architecture/
 │   └── modules.md                    # Module map with keywords
 ├── knowledge/
@@ -23,7 +24,7 @@
 
 ## LOAD Phase
 
-1. Read `.forge/index.md` first — it is the table of contents (max 100 lines, one line per entry).
+1. Read `.forge/index.md` first — it is the table of contents (max 100 lines).
 2. From the user's task description, identify which modules are involved.
 3. Read ONLY the memory files relevant to those modules. Do NOT read all of `.forge/`.
 4. Read the most recent `sessions/<date>-*.md` for continuity with the previous session.
