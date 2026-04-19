@@ -44,7 +44,7 @@ When `Cargo.toml` exists at the project root. For workspaces, this is the top-le
 ### Tests
 - Unit tests in `#[cfg(test)] mod tests { ... }` at the bottom of the source file they test.
 - Integration tests in `tests/` directory, one file per scenario. Each test file is a separate crate; use `common/mod.rs` for shared fixtures.
-- Mocks via traits + dependency injection. Constructors take `impl Trait` or `Arc<dyn Trait + Send + Sync>`; never concrete types.
+- Mocks via traits + dependency injection. Inject via a generic parameter (`<T: Trait>`), `impl Trait`, or a trait object (`&dyn Trait`, `Box<dyn Trait>`, `Arc<dyn Trait + Send + Sync>`) — pick the form that matches the ownership and thread-safety requirements. Never take concrete types.
 - `cargo test` must pass. `cargo clippy -- -D warnings` must be clean.
 - Prefer `assert_eq!` / `assert!` with a message when the failure context isn't obvious.
 

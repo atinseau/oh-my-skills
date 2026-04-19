@@ -81,6 +81,7 @@ Execute the `test_cmd` from `.forge/config.md` frontmatter:
   - Read `references/qa-runner.md`.
   - **Invest time**: analyze the app, probe host tools, design a strategy (visual, programmatic, metric, or mixed).
   - Create `.forge/qa/index.md` and any custom scripts/fixtures the strategy needs inside `.forge/qa/`.
+  - **Building the QA strategy on the first pass is NOT counted as an iteration failure.** It is setup work. Iterations count only from JUDGE failures onward.
 - If `.forge/qa/index.md` exists:
   - Follow the strategy.
   - If insufficient for the current task, **extend** `qa/index.md` and the tooling. Never bypass.
@@ -97,14 +98,14 @@ Evaluate three criteria:
 
 - **All pass** → Step 7.
 - **Any fail** → back to Step 2 with full context (which criterion, what error, relevant artefacts).
-- **5th failure** → stop. Document the blocker in `.forge/bugs/<id>.md` and inform the user.
+- **5th failure** → stop. Document the blocker in `.forge/bugs/BUG-<NNN>.md` and inform the user.
 
 ## Step 7 — MEMORIZE (mandatory)
 
 Read `references/memory-system.md`. The cycle does not end without saving.
 
 1. Update `.forge/architecture/modules.md` if modules changed.
-2. Create or update `.forge/features/<name>.md` or `.forge/bugs/<id>.md`.
+2. Create or update `.forge/features/<name>.md` or `.forge/bugs/BUG-<NNN>.md`.
 3. Update `.forge/knowledge/dependencies.md` if dependencies changed.
 4. Update `.forge/qa/index.md` if the QA strategy evolved.
 5. Append to `.forge/sessions/<date>-<topic>.md`.

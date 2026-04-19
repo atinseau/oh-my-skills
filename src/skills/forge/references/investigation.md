@@ -28,7 +28,7 @@ test "BUG-<NNN>: describe the broken behaviour" {
 ```
 
 **Via QA:**
-If the bug is reproducible via the project's QA flow, run that flow (`.forge/qa/` scripts) to capture the broken state and describe it in `.forge/bugs/<id>.md`.
+If the bug is reproducible via the project's QA flow, run that flow (`.forge/qa/` scripts) to capture the broken state and describe it in `.forge/bugs/BUG-<NNN>.md`.
 
 ### Step 2: ISOLATE
 

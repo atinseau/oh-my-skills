@@ -16,7 +16,7 @@
 ├── features/
 │   └── <name>.md                    # One file per feature
 ├── bugs/
-│   └── <id>.md                      # One file per resolved bug
+│   └── BUG-<NNN>.md                # One file per resolved bug
 ├── sessions/
 │   └── <date>-<topic>.md            # One session log per session
 └── qa/                              # Opaque — managed by agent (see QA is separate)
@@ -37,7 +37,7 @@
 Mandatory at the end of every successful cycle. The cycle does not end without saving.
 
 1. Update `architecture/modules.md` if modules were created, modified, or deleted.
-2. Create or update `features/<name>.md` for feature work, or `bugs/<id>.md` for bug fixes.
+2. Create or update `features/<name>.md` for feature work, or `bugs/BUG-<NNN>.md` for bug fixes.
 3. Update `qa/index.md` if the QA strategy evolved.
 4. Update `knowledge/dependencies.md` if dependencies changed.
 5. Append to `sessions/<date>-<topic>.md` — one session log per day per topic. If the file exists for today, append.
@@ -153,4 +153,4 @@ Refer to `references/qa-runner.md` for QA discipline and the agent's responsibil
 - **index.md**: Regenerated automatically after every MEMORIZE phase. Max 100 lines.
 - **Conflicts**: If memory contradicts current code, code wins. Update the memory.
 - **No duplicates**: Before creating a new entry, check if one exists.
-- **Git**: `.forge/` is committed to git (except QA artefacts, which are gitignored per project convention).
+- **Git**: `.forge/` is committed to git, including `.forge/qa/index.md` and `.forge/qa/scripts/` (scripts must be runnable in CI — see `references/qa-runner.md`). Gitignore only truly generated outputs (e.g. transient `current.png`, `diff-*.png`, on-the-fly fixtures); that policy belongs in the project's own `.gitignore`.

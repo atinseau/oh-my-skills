@@ -36,6 +36,8 @@ done
 
 Also check language-specific runners the project already uses (look at `package.json`, `Cargo.toml`, `pyproject.toml`, `Makefile`, etc.). Extend the probe above with anything project-specific. Record the full output in `qa/index.md` — not a summary, the actual results.
 
+The snippet assumes a POSIX shell (bash/zsh). On Windows/PowerShell hosts, adapt to `Get-Command` or equivalent — the probe's intent is the inventory, not the exact syntax.
+
 ### 4. Adapted strategy
 
 Choose a strategy — or a mix — justified against what you found in questions 1–3:
