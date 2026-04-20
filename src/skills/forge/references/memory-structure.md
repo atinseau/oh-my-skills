@@ -112,8 +112,7 @@ Four cumulative files under `knowledge/`:
 - **`patterns.md`** — reusable patterns (test idioms, error shapes, workflows). Entries separated
   by `---`. Follows `templates/pattern.md` (`name` + `keywords` + `created`; `## Pattern` /
   `## Why here` / `## Where applied`).
-- **`pitfalls.md`** — traps + workarounds. Entries separated by `---`. Short frontmatter (`name` +
-  `keywords`); body explains the trap and fix.
+- **`pitfalls.md`** — traps + workarounds. Entries separated by `---`. Frontmatter: `name`, `keywords`, `paths_involved: [<path>, <path>]` (files or directories where this pitfall applies — enables pre-flight warnings). Body explains the trap and fix.
 - **`decisions.md`** — architectural decisions. Entries separated by `---`. Follows
   `templates/decision.md` (`name` + `keywords` + `created`; `## Context` / `## Options considered`
   / `## Chosen` / `## Consequences`).
@@ -128,8 +127,9 @@ instead of duplicating.
 `features/<name>.md` uses `skills/forge/templates/feature.md`.
 `bugs/BUG-<NNN>.md` uses `skills/forge/templates/bug.md`.
 
-Both have their own frontmatter with `keywords:` for index retrieval. `<NNN>` is zero-padded
-ascending (001, 002, ...).
+Both have their own frontmatter with `keywords:` for index retrieval. `<NNN>` is zero-padded ascending (001, 002, ...).
+
+**`paths_involved`** is a mandatory field on `bugs/BUG-<NNN>.md` and `knowledge/pitfalls.md` entries — a list of files or directories where the bug/pitfall manifested. This field powers pre-flight warnings (see `recall.md` → "Pre-flight"): when Claude is about to edit any path listed in a bug or pitfall, forge surfaces the entry as a warning before the edit.
 
 ## Session files (sessions/<date>-<topic>-<author-slug>.md)
 

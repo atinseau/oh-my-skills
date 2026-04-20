@@ -1,6 +1,6 @@
 # Recall
 
-How to read from `.forge/` on demand. Never scan the whole tree. `index.md` is always the entry point. Be selective — over-reading defeats the purpose.
+How to read from `.forge/`. Three modes: **proactive** (task start), **pre-flight** (before file edits), **reactive** (user query). Never scan the whole tree. `index.md` is always the entry point.
 
 ## Entry point
 
@@ -9,77 +9,113 @@ How to read from `.forge/` on demand. Never scan the whole tree. `index.md` is a
 - Each entry is one line with keywords.
 - Reading the index is cheap. Reading beyond it is selective.
 
-## Keyword match
+## Mode 1 — Proactive (task start)
 
-1. Extract 3-5 salient terms from the user's current task or question. Include common variants and synonyms where relevant (e.g. "login" ⇔ "auth" ⇔ "signin").
-2. Scan each index entry's `keywords:` list for overlaps.
-3. Score per entry:
+When the user gives a substantive task (feature, bug, refactor), forge runs this BEFORE the agent starts coding:
+
+1. Read `.forge/index.md`.
+2. Extract 3-5 salient terms from the user's task description. Include common variants and synonyms (e.g. "login" ⇔ "auth" ⇔ "signin"; "cookie" ⇔ "session").
+3. Also extract the task's **action type** (adding a feature? fixing a bug? refactoring? debugging?) — this biases which memory categories matter.
+4. Score index entries:
    - ≥ 2 keyword overlaps → **high relevance**
-   - exactly 1 overlap → **low relevance**
+   - 1 overlap → **low relevance**
    - 0 overlaps → **skip**
-4. Sort by relevance. High relevance entries are candidates for loading; low relevance are candidates only if there are fewer than 2 high-relevance matches.
+5. Action-type bias:
+   - Feature work → prioritise related features + decisions + patterns
+   - Bug work → prioritise prior bugs with path overlap + pitfalls
+   - Refactor → prioritise patterns + architectural decisions
+6. Read the top 1-3 high-relevance files (include low-relevance if < 2 high-relevance matches).
+7. If a matched `modules/<name>.md` is `seeded: true`, enrich it first (see "Lazy module enrichment" below).
+8. **Announce what was loaded** in one line so the user sees forge is active:
+   > *forge: loaded features/oauth2-login.md, knowledge/pitfalls.md#edge-runtime-cookies*
 
-## Lazy load
+If no entries match with confidence, stay silent. A negative recall is a valid outcome.
 
-- Read the top 1-3 high-relevance files. Stop at 3 even if more match — forge is selective.
-- If nothing scores high-relevance, do NOT over-read. Proceed with the task using ambient context. A negative recall is a valid outcome — forge is not required to produce a hit.
-- Never read `.forge/` tree-walking style. Always go through the index.
+## Mode 2 — Pre-flight (before file edits)
+
+Runs BEFORE every Edit / Write on a non-trivial file (skip for typo fixes, formatting, < 5-line changes).
+
+1. Get the target path `P` from the intended edit.
+2. Scan `.forge/bugs/BUG-*.md` and `.forge/knowledge/pitfalls.md` for entries whose `paths_involved:` list contains `P` OR an ancestor directory of `P`.
+3. If any match, surface them to the user BEFORE the edit, formatted as warnings:
+   ```
+   ⚠️ Before editing `<P>`:
+   - **Pitfall: edge-runtime-cookies** — `cookies()` sync call crashes in edge runtime. Use `await cookies()`.
+   - **BUG-042** (resolved 2026-02-14) — session-expiry race condition. Check that fix still holds.
+   ```
+4. Proceed with the edit. The warning is informational, not blocking. Claude should verify the pending change doesn't recreate the flagged issue.
+
+If no entries match `P`, skip this mode silently. Pre-flight is additive, not a gate.
+
+**Why `paths_involved` matters:** without it, pre-flight has nothing to match on and degrades to pure keyword recall (which may miss path-specific learnings). Save discipline requires populating `paths_involved` on every bug and pitfall — see `save.md`.
+
+## Mode 3 — Reactive (user query)
+
+When the user references past work: "how did we...", "what was the decision on...", "last time we did...", "like we did in...".
+
+Same procedure as Mode 1, but the user's explicit query is the keyword source (no need to guess task intent).
 
 ## Lazy module enrichment
 
-When a matched `modules/<name>.md` entry has `seeded: true` in its frontmatter (i.e. it's a stub, not yet enriched), enrich it before reading:
+When a matched `modules/<name>.md` entry has `seeded: true`:
 
 1. Read the `path:` field.
 2. List the directory at that path (one level deep; do not recurse).
 3. Read 2-3 representative files:
-   - The public entry point (`index.*`, `main.*`, `mod.rs`, `lib.rs`, etc.)
-   - The largest file in the directory (proxy for "most substantive")
-   - A file whose name suggests canonical role (e.g. `service.ts`, `handler.go`)
-4. Extract:
-   - `role:` — one sentence on what the module does
-   - `key_files:` — 2-3 bullets: `- <path> (role)`
-   - `keywords:` — 3-6 terms drawn from filenames, exported symbols, doc comments
-5. Rewrite `modules/<name>.md`: drop `seeded: true`, add `keywords:` to frontmatter, add `## Role` + `## Key files` body sections (see `memory-structure.md` for the enriched format).
-6. Regenerate `.forge/index.md` to reflect the enriched entry's new keywords.
-7. Budget: maximum **5 file reads per enrichment**. If 5 files weren't enough to understand the module, that's a signal the module is too large — note this in a pitfall entry for later.
+   - Public entry point (`index.*`, `main.*`, `mod.rs`, `lib.rs`, etc.)
+   - The largest file (proxy for "most substantive")
+   - A file whose name suggests canonical role (`service.ts`, `handler.go`, etc.)
+4. Extract: `role:` (one sentence), `key_files:` (2-3 bullets), `keywords:` (3-6 terms from filenames + exported symbols + doc comments).
+5. Rewrite `modules/<name>.md`: drop `seeded: true`, add `keywords:` frontmatter field, add `## Role` + `## Key files` body sections.
+6. Regenerate `.forge/index.md`.
+7. Budget: max **5 file reads per enrichment**.
 
-**Atomicity:** if enrichment aborts before step 5 (read failure, budget exhausted, missing path), leave the stub intact with `seeded: true`. Do NOT write a half-enriched module entry. Record a pitfall entry explaining why enrichment was skipped.
+**Atomicity:** if enrichment aborts before step 5 (read failure, budget exhausted, missing path), leave the stub intact with `seeded: true`. Do NOT write a half-enriched entry. Record a pitfall explaining why enrichment was skipped.
 
-Re-enrichment (when an enriched module has drifted) follows the same procedure and same 5-file cap.
+Re-enrichment (drifted modules) follows the same procedure.
 
-### Enrichment: what to skip
+### Skip enrichment when:
 
-Skip enrichment and proceed with ambient context if:
-
-- The module path no longer exists on disk (deleted, renamed).
-- The task only peripherally references the module (low-relevance score, not high).
-- The module was enriched within the last 7 days and there are no recent commits touching its path (check with `git log --since="7 days ago" -- <path>`).
-
-In those cases, keep `seeded: true` and do not burn file reads on a stale or irrelevant enrichment.
+- Module path no longer exists on disk (deleted, renamed).
+- Task only peripherally references the module (low-relevance score).
+- Module was enriched in the last 7 days AND `git log --since="7 days ago" -- <path>` shows no recent commits.
 
 ## Cross-checks
 
-When the current task has a specific concern, also load the relevant knowledge file:
+Beyond the primary keyword-matched files, these categorical loads fire when the task has specific concerns:
 
-- Task involves testing → also read `.forge/knowledge/patterns.md` (scan for test patterns).
-- Task touches an architectural choice → also read `.forge/knowledge/decisions.md`.
-- Task touches a known-risky area (module has recent bug entries in the index) → also read `.forge/knowledge/pitfalls.md`.
-- Task mentions dependencies → also read `.forge/knowledge/dependencies.md`.
-
-Cross-checks are ADDITIONS to the main load, not replacements. Keep them bounded: read only the sections that match task keywords within those files.
+| Task concern | Also read |
+|---|---|
+| Testing | `.forge/knowledge/patterns.md` (scan for test patterns) |
+| Architectural choice | `.forge/knowledge/decisions.md` |
+| Known-risky module (recent bugs in index) | `.forge/knowledge/pitfalls.md` |
+| Dependencies | `.forge/knowledge/dependencies.md` |
+| **Code review request** | `.forge/knowledge/pitfalls.md` + `.forge/bugs/BUG-*.md` for `paths_involved` overlap with the diff — these become mandatory review checks |
 
 ### Cross-check scope limit
 
-Cross-checks must stay bounded. When reading a knowledge file for a cross-check:
+- Do not read an entire file if it's long — scan for section headers matching task keywords.
+- Stop reading once relevant sections are found.
+- A cross-check producing no matching content is valid. Do not force connections.
 
-- Do not read the entire file if it's long — scan for section headers that match task keywords.
-- Stop reading once the relevant section(s) are found.
-- A cross-check that produces no matching content is a valid outcome. Do not force a connection.
+## Code-review integration (special case of cross-check)
+
+When the agent is about to request a code review (via `superpowers:requesting-code-review`) OR is performing a review:
+
+1. Compute the set of files touched by the diff.
+2. For each file, scan `.forge/bugs/BUG-*.md` and `.forge/knowledge/pitfalls.md` for `paths_involved` overlap.
+3. Compile the matching entries into a "forge memory checklist" and include it in the review request context:
+   > **Forge memory — check the diff against these prior findings for `<path>`:**
+   > - BUG-042 (session-expiry race condition)
+   > - Pitfall: edge-runtime-cookies
+4. The reviewer (self-review, code-reviewer subagent, or human) must explicitly confirm the diff doesn't regress any listed item.
+
+This makes `.forge/` memory an active guard-rail in review, not just documentation.
 
 ## What recall does NOT do
 
-- Does not proactively read source code — only files identified through the index.
+- Does not proactively read source code — only files identified through the index or `paths_involved` matching.
 - Does not re-enrich already-enriched module files (that's triggered by drift detection, separate concern).
-- Does not synthesise memory into a prose summary — returns the file contents as-is to the agent's context.
-- Does not read files not listed in the index. If a merge-conflict resolution left an orphan file in `.forge/`, fix it via the merge-conflict procedure in `memory-structure.md` (regenerate the index from disk) — do not bypass the index.
+- Does not synthesise memory into a prose summary — returns file contents as-is to the agent's context.
+- Does not read files outside the index. If a merge-conflict resolution left an orphan file in `.forge/`, fix it via the merge-conflict procedure in `memory-structure.md` (regenerate the index from disk) — do not bypass the index.
 - Does not fetch from remote or network — all reads are local-filesystem.

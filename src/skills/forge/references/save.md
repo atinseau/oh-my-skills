@@ -51,6 +51,7 @@ When no template exists for pitfalls, write the entry inline:
 ---
 name: <short-slug>
 keywords: [term1, term2, term3]
+paths_involved: [<path/to/file>, <path/to/module/>]
 date: <ISO date>
 ---
 <One-sentence description of the pitfall.>
@@ -60,20 +61,39 @@ date: <ISO date>
 
 Append to `knowledge/pitfalls.md`, preceded by `---` if the file already has entries.
 
-## Deduplicate before save
+### `paths_involved`: powering pre-flight warnings
 
-1. For `patterns.md`, `pitfalls.md`, and `decisions.md` entries:
-   - Read the current file (if it exists).
-   - Grep for overlapping keywords (2+ shared terms suggests the same concern).
-   - Scan the matching entries: is this truly the same concern?
-   - If yes — UPDATE conservatively: preserve the original `created:` date and the existing `## Pattern` / `## Why here` / `## Context` content. Append to `## Where applied` (patterns), add a clarifying note, or refine the workaround (pitfalls). Do NOT rewrite the core body unless the original is wrong. Do NOT create a second entry.
-   - If no — append a new entry, separated from the previous by `---`.
+Bug entries (`bugs/BUG-<NNN>.md`) and pitfall entries (`knowledge/pitfalls.md`) MUST include `paths_involved: [<path>, <path>]` in their frontmatter. List the files or directories where the bug/pitfall manifests — these are checked on every file edit (see `recall.md` → "Pre-flight"). Missing this field = the pitfall will not fire as a pre-flight warning and will only surface via keyword match, dramatically reducing its protective value.
 
-2. For `features/<name>.md` and `bugs/BUG-<NNN>.md` (per-entity files):
-   - If a file with the same name/id already exists, UPDATE in place.
-   - For bugs, increment `<NNN>` to the next ascending unused number.
+Guidelines:
+- Be specific when possible (`src/auth/session.ts`) and broad when the pitfall applies module-wide (`src/auth/`).
+- Feature files MAY include `paths_involved` too (helps with cross-referencing) but it is not mandatory there.
+- Patterns and decisions do not use `paths_involved` — they apply to the whole project, not specific files.
 
-3. Deduplication is a REQUIRED step — skipping it produces a cluttered `.forge/` where every cycle adds noise.
+## Deduplicate before save — semantic, not just keyword-overlap
+
+Keyword overlap alone is a weak dedup signal: "token-refresh-race" and "session-expiry-bug" might be the same concern under different names. Dedup is semantic: the agent must actively read candidate entries and decide.
+
+**Procedure for `patterns.md`, `pitfalls.md`, and `decisions.md`:**
+
+1. Read the target file (if it exists).
+2. Find candidates: identify the top 3 entries that share ≥ 2 keywords with the new entry (or share `paths_involved` overlap for pitfalls).
+3. If candidates exist, read them fully (not just headers).
+4. For each candidate, explicitly classify:
+   - **Same concern** — the new finding is a refinement, additional context, or another occurrence of the same underlying issue/pattern/decision.
+   - **Related but distinct** — different enough to warrant a separate entry; cross-reference in the new entry's body (`See also: <other-entry-name>`).
+   - **Unrelated** — keyword overlap was coincidental.
+5. Classification drives action:
+   - **Same concern** → UPDATE conservatively: preserve original `created:` date and existing `## Pattern` / `## Why here` / `## Context` body. Append to `## Where applied` (patterns), extend `paths_involved` (pitfalls), add a refinement note, or refine the workaround. Do NOT rewrite the core body unless the original is wrong.
+   - **Related but distinct / Unrelated** → APPEND a new entry (separated by `---`). Add cross-references to related entries in the body.
+6. If step 3-5 reveals the new finding is actually a duplicate of something already well-captured: do NOT save. Skipping duplicates is a valid save outcome.
+
+**Procedure for `features/<name>.md` and `bugs/BUG-<NNN>.md` (per-entity files):**
+
+- If a file with the same name/id already exists, UPDATE in place.
+- For bugs, increment `<NNN>` to the next ascending unused number.
+
+**Deduplication is MANDATORY.** Skipping it clutters `.forge/` and dilutes future recalls.
 
 ## When NOT to save
 

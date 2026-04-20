@@ -2,6 +2,7 @@
 id: BUG-<NNN>
 status: resolved
 keywords: [<kw1>, <kw2>]
+paths_involved: [<path/to/file>, <path/to/module/>]   # files or directories where the bug manifested — enables pre-flight warnings
 created: <YYYY-MM-DD>
 resolved: <YYYY-MM-DD>
 ---
