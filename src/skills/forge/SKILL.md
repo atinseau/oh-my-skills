@@ -14,7 +14,7 @@ Best fit: features, bugfixes, or refactors spanning hours to days. Architecture 
 
 Overkill for: one-shot scripts, single-file edits, throwaway repos. On day 1 of a project, forge costs more than it saves. Break-even hits around day 3-4 of active work; from then on, every cycle amortises the memory investment across faster LOADs and fewer rediscovered pitfalls.
 
-**If the current task is a one-liner or the project will exist for less than an afternoon, do NOT invoke forge.** Use the default Claude Code flow instead.
+**When bootstrapping a new project for a one-liner or a throwaway experiment, do NOT invoke forge.** Use the default Claude Code flow instead. Once `.forge/` already exists in a project, every task runs through the cycle — the memory is already paid for, and a one-line fix on day 30 still benefits from the discipline.
 
 ## The cycle
 
@@ -37,17 +37,19 @@ Read `references/memory-system.md` for rules.
 
 **Desync probe (runs before LOAD proper):**
 
-1. Read `last_consolidation` from `.forge/config.md` frontmatter.
-2. Run `git log --oneline --since="<last_consolidation>" -- . ":(exclude).forge/"` to list commits that changed code since the last forge cycle completed.
-3. Run `git diff --name-only "<last_consolidation>"..HEAD -- package.json Cargo.toml Package.swift pyproject.toml go.mod Gemfile pom.xml build.gradle composer.json` (omit any manifest that does not exist in this project) to catch manifest mutations.
-4. If either command returns non-empty output:
-   - Summarise the changes in one short paragraph (N commits, which manifests changed).
-   - Ask the user: *"Memory was last consolidated on `<last_consolidation>`. Do you want me to refresh dependencies and module listings before proceeding? (y/n)"*
-   - If **yes**: run the bounded refresh from `references/memory-system.md` → "Desync Detection" → "Refresh procedure (when user accepts)". Update `last_consolidation` to now. Then proceed to the numbered LOAD steps.
-   - If **no**: record a `## Known staleness` section in the upcoming session log listing the detected changes verbatim. Then proceed.
-5. If both commands return empty: memory is up-to-date, proceed to the numbered LOAD steps.
+- Read `last_consolidation` from `.forge/config.md` frontmatter. This is an ISO 8601 date, not a git SHA.
+- Run `git log --oneline --since="<last_consolidation>" -- . ":(exclude).forge/"` to list commits that changed code (outside `.forge/`) since the last forge cycle completed.
+- Run `git log --since="<last_consolidation>" --name-only --pretty=format: -- package.json Cargo.toml Package.swift pyproject.toml go.mod Gemfile pom.xml build.gradle composer.json` — then dedup the output — to list manifest files that changed since `last_consolidation`. (Do NOT use `git diff <date>..HEAD`: `git diff` requires revisions on both sides, not dates.)
+- If either command returns non-empty output:
+  - Summarise the changes in one short paragraph (N commits, which manifests changed).
+  - Ask the user: *"Memory was last consolidated on `<last_consolidation>`. Do you want me to refresh dependencies and module listings before proceeding? (y/n)"*
+  - If **yes**: run the bounded refresh from `references/memory-system.md` → "Desync Detection" → "Refresh procedure (when user accepts)". The refresh updates `last_consolidation` itself. Then proceed to the numbered LOAD steps below.
+  - If **no**: record a `## Known staleness` section in the upcoming session log listing the detected changes verbatim. Then proceed.
+- If both commands return empty: memory is up-to-date, proceed to the numbered LOAD steps below.
 
 See `references/memory-system.md` → "Desync Detection" for the full rationale and refresh procedure.
+
+**LOAD steps (after the probe completes):**
 
 1. Read `.forge/index.md`.
 2. From the user's task, match keywords against `architecture/modules.md` (primary), `knowledge/pitfalls.md` (bug keywords), and `bugs/` entries (known issues).

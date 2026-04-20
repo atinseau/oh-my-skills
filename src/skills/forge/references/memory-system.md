@@ -27,7 +27,7 @@
 1. Read `.forge/index.md` first — it is the table of contents (max 100 lines).
 2. From the user's task description, identify which modules are involved.
 3. Read ONLY the memory files relevant to those modules. Do NOT read all of `.forge/`.
-4. Read the most recent `sessions/<date>-*.md` for continuity with the previous session.
+4. Read the most recent `sessions/<date>-<topic>-<author-slug>.md` for continuity with the previous session (glob: `sessions/<date>-*.md` still matches the new pattern).
 5. Read the source files of the identified modules (listed in `architecture/modules.md`).
 
 **Rule: never read the entire codebase.** The memory system replaces full scans. If a module is not in `modules.md`, it does not exist for this task.
@@ -103,9 +103,9 @@ When creating new memory files, copy the corresponding template from `skills/for
 ## File Format Rules
 
 1. **One file = one subject** — one bug, one feature, one session per file. `architecture/modules.md` is the single exception: one file with many module blocks, where each module is a `## <name>` section.
-2. **Every per-entity file has `keywords:` in frontmatter** — applies to `bugs/BUG-<NNN>.md`, `features/<name>.md`, `sessions/<date>-<topic>-<author-slug>.md`. In `architecture/modules.md`, each enriched module block lists `keywords:` as a body line inside its `## <name>` section; seeded blocks omit keywords until enrichment. Either form is the contract that makes `index.md` useful.
+2. **Indexed-entity files carry `keywords:` in frontmatter** — applies to `bugs/BUG-<NNN>.md` and `features/<name>.md`. In `architecture/modules.md`, each enriched module block lists `keywords:` as a body line inside its `## <name>` section; seeded blocks omit keywords until enrichment. Session files (`sessions/<date>-<topic>-<author-slug>.md`) are narratives, not indexed entities, and carry `date`, `topic`, `author`, `iterations`, `result` in frontmatter but no `keywords`. The combination of per-entity keywords + module keywords is what makes `index.md` useful.
 3. **`index.md` is derived, never hand-edited** — regenerated each MEMORIZE phase.
-4. **Sessions are append-only and per-author** — one file per session per author. Filename pattern: `<date>-<topic>-<author-slug>.md`. `author-slug` is derived from `git config user.email` — take the part before `@`, lowercase it, replace any non-alphanumeric character with `-`, truncate to 20 characters. If no git identity is configured, use `unknown`. This keeps concurrent sessions on the same day from colliding in git.
+4. **Sessions are append-only and per-author** — one file per session per author. Filename pattern: `<date>-<topic>-<author-slug>.md`. `author-slug` is derived from `git config user.email` — take the part before `@`, lowercase it, replace any non-alphanumeric character with `-`, truncate to 20 characters. If no git identity is configured, use `unknown`. This keeps concurrent sessions on the same day from colliding in git. Note: if a single contributor works under multiple git identities (e.g. work vs personal email, repo-local vs global config), the slug will differ and two session files may be created for what is conceptually one session — accepted tradeoff, the filename collision risk is avoided and the narratives still live in git history.
 5. **`knowledge/pitfalls.md` and `knowledge/dependencies.md` are cumulative** — new entries are appended, old entries are never removed.
 6. **No duplication** — pitfalls live once in `knowledge/pitfalls.md`, referenced by links from modules and bugs.
 7. **QA artefacts do NOT live in the memory tree** — they live in `.forge/qa/`.
