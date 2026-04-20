@@ -15,7 +15,7 @@ created: <YYYY-MM-DD>
 - `<path>` (role)
 - `<path>` (role)
 
-## Learnings
+## Learnings (1-3 bullets)
 - <Project-specific insight worth remembering.>
 
 ## Follow-ups

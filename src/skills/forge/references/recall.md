@@ -43,6 +43,8 @@ When a matched `modules/<name>.md` entry has `seeded: true` in its frontmatter (
 6. Regenerate `.forge/index.md` to reflect the enriched entry's new keywords.
 7. Budget: maximum **5 file reads per enrichment**. If 5 files weren't enough to understand the module, that's a signal the module is too large — note this in a pitfall entry for later.
 
+**Atomicity:** if enrichment aborts before step 5 (read failure, budget exhausted, missing path), leave the stub intact with `seeded: true`. Do NOT write a half-enriched module entry. Record a pitfall entry explaining why enrichment was skipped.
+
 Re-enrichment (when an enriched module has drifted) follows the same procedure and same 5-file cap.
 
 ### Enrichment: what to skip
@@ -79,5 +81,5 @@ Cross-checks must stay bounded. When reading a knowledge file for a cross-check:
 - Does not proactively read source code — only files identified through the index.
 - Does not re-enrich already-enriched module files (that's triggered by drift detection, separate concern).
 - Does not synthesise memory into a prose summary — returns the file contents as-is to the agent's context.
-- Does not hide files — if a file is relevant but not in the index (possible after certain merge-conflict resolutions), the agent may read it, but should then regenerate the index at next save.
+- Does not read files not listed in the index. If a merge-conflict resolution left an orphan file in `.forge/`, fix it via the merge-conflict procedure in `memory-structure.md` (regenerate the index from disk) — do not bypass the index.
 - Does not fetch from remote or network — all reads are local-filesystem.

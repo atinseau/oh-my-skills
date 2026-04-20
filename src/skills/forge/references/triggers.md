@@ -16,6 +16,8 @@ outside these signals.
 | 5 | Memory may be stale | Desync probe + refresh ask |
 | 6 | User references past context | Recall |
 
+Note: `<author-slug>` referenced in trigger actions below is derived from `git config user.email` per the rule in `memory-structure.md` → "Session files" (take part before `@`, lowercase, non-alphanumerics → `-`, truncate 20 chars, fallback `unknown`).
+
 ## Trigger 1 — Bootstrap
 
 **Detect:**

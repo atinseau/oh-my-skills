@@ -13,6 +13,8 @@ How to write to `.forge/`. The goal is compact, deduped, keyword-indexed entries
 | Decision made | `templates/decision.md` | appended entry in `knowledge/decisions.md` |
 | Memorable session | `templates/session.md` | `sessions/<date>-<topic>-<author-slug>.md` |
 
+When both a feature/bug file AND a session file would be written for the same work, **prefer the feature/bug file**. The session log is redundant — skip it. A session file is only written when the work is memorable but did not complete a specific feature or fix a specific bug.
+
 `knowledge/*.md` files are cumulative — entries are separated by `---` lines or `## <name>` headers. They are NOT one-file-per-entity like features and bugs.
 
 ## Compact discipline
@@ -64,7 +66,7 @@ Append to `knowledge/pitfalls.md`, preceded by `---` if the file already has ent
    - Read the current file (if it exists).
    - Grep for overlapping keywords (2+ shared terms suggests the same concern).
    - Scan the matching entries: is this truly the same concern?
-   - If yes — UPDATE the existing entry (add a note, refine the workaround, extend `## Where applied`). Do NOT create a second entry.
+   - If yes — UPDATE conservatively: preserve the original `created:` date and the existing `## Pattern` / `## Why here` / `## Context` content. Append to `## Where applied` (patterns), add a clarifying note, or refine the workaround (pitfalls). Do NOT rewrite the core body unless the original is wrong. Do NOT create a second entry.
    - If no — append a new entry, separated from the previous by `---`.
 
 2. For `features/<name>.md` and `bugs/BUG-<NNN>.md` (per-entity files):
@@ -89,7 +91,7 @@ If nothing is memorable, NO session file is written for that cycle. Forge is a k
 
 Always, after any write to `.forge/`:
 
-1. Update `.forge/index.md` — regenerate the relevant section(s) from the new content. The index is derived; never hand-edit.
+1. Update `.forge/index.md` — regenerate the relevant section(s) from the new content. Set the frontmatter `updated:` field to today's ISO date. The index is derived; never hand-edit.
 2. Update `last_consolidation` in `.forge/context.md` frontmatter to the current ISO date.
 3. Do NOT git commit — the user commits when they're ready. Forge writes files; it does not push them.
 
