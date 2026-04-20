@@ -4,50 +4,25 @@
 keywords; `index.md` is the table of contents and always the entry point. Files are deliberately
 small so recall can be selective — the agent loads only what matches the current task.
 
+For per-entity schemas (context, module, bug, pitfall, feature, decision, pattern, session),
+see `schemas/<entity>.md`.
+
 ## Directory Layout
 
 ```
 .forge/
-├── index.md                          # Table of contents (max 100 lines, derived)
-├── context.md                        # Project summary: languages, frameworks, commands, last_consolidation
+├── index.md                          # Table of contents (max 100 lines, derived) — see schemas/index below
+├── context.md                        # Project summary — see schemas/context.md
 ├── modules/
-│   └── <name>.md                     # One file per module, built lazily on first reference
+│   └── <name>.md                     # One file per module — see schemas/module.md
 ├── knowledge/
-│   ├── patterns.md                   # Reusable patterns (cumulative)
-│   ├── pitfalls.md                   # Traps + workarounds (cumulative)
-│   ├── decisions.md                  # Architectural decisions (cumulative)
+│   ├── patterns.md                   # Reusable patterns (cumulative) — see schemas/pattern.md
+│   ├── pitfalls.md                   # Traps + workarounds (cumulative) — see schemas/pitfall.md
+│   ├── decisions.md                  # Architectural decisions (cumulative) — see schemas/decision.md
 │   └── dependencies.md               # Extracted from manifests (rewritten on refresh)
-├── features/<name>.md                # One file per completed feature
-├── bugs/BUG-<NNN>.md                 # One file per resolved bug
-└── sessions/<date>-<topic>-<author-slug>.md   # Only when memorable
-```
-
-## context.md
-
-Frontmatter fields: `languages: [<list>]`, `frameworks: [<list>]`, `package_manager: <name>`,
-`build_cmd`, `test_cmd`, `lint_cmd` (empty string is valid), `detected_at: <ISO 8601 date>`
-(bootstrap time, never changes), `last_consolidation: <ISO 8601 date>` (updated on every forge
-write — drives the sync/desync trigger).
-
-Body: 3-8 sentences on stack specifics, structure, and conventions worth remembering. Not a full
-architecture document — a condensed briefing.
-
-```markdown
----
-languages: [typescript, sql]
-frameworks: [nextjs-15, drizzle]
-package_manager: bun
-build_cmd: bun run build
-test_cmd: bun test
-lint_cmd: bun run lint
-detected_at: 2026-04-20
-last_consolidation: 2026-04-20
----
-
-# MyApp — Next.js SaaS
-
-Auth via custom JWT (no NextAuth). Postgres via Drizzle. Tailwind + shadcn for UI.
-Monorepo: web app at `apps/web`, shared schema at `packages/schema`.
+├── features/<name>.md                # One file per completed feature — see schemas/feature.md
+├── bugs/BUG-<NNN>.md                 # One file per resolved bug — see schemas/bug.md
+└── sessions/<date>-<topic>-<author-slug>.md   # Only when memorable — see schemas/session.md
 ```
 
 ## index.md
@@ -93,48 +68,7 @@ updated: 2026-04-20
 - 2026-04-20-oauth2-login-arthur-tweak — result: pass — keywords: oauth2, login
 ```
 
-## Per-module files (modules/<name>.md)
-
-Frontmatter: `name`, `path`, `keywords: [<3-6 terms>]` (absent when `seeded: true`), optional
-`status: active | removed` (`removed` keeps the file for keyword history), optional `seeded: true`
-(stub created at first reference, not yet enriched).
-
-Body (absent when seeded): `## Role` (one sentence), `## Key files` (2-3 bullets `- <path> (role)`),
-`## Dependencies` (optional, 1-3 bullets).
-
-Seeded stub: frontmatter with `name`, `path`, `seeded: true` — no body. Enriched: frontmatter with
-full `keywords` array + `## Role` / `## Key files` / `## Dependencies` body sections.
-
-## Knowledge files
-
-Four cumulative files under `knowledge/`:
-
-- **`patterns.md`** — reusable patterns (test idioms, error shapes, workflows). Entries separated
-  by `---`. Follows `templates/pattern.md` (`name` + `keywords` + `created`; `## Pattern` /
-  `## Why here` / `## Where applied`).
-- **`pitfalls.md`** — traps + workarounds. Entries separated by `---`. Frontmatter: `name`, `keywords`, `paths_involved: [<path>, <path>]` (files or directories where this pitfall applies — enables pre-flight warnings). Body explains the trap and fix.
-- **`decisions.md`** — architectural decisions. Entries separated by `---`. Follows
-  `templates/decision.md` (`name` + `keywords` + `created`; `## Context` / `## Options considered`
-  / `## Chosen` / `## Consequences`).
-- **`dependencies.md`** — one `## <package-name>` block per direct dependency (`version:` +
-  `purpose:`). Rewritten entirely on sync refresh, not appended.
-
-Before appending a pattern or pitfall, check for an existing entry on the same concern — update
-instead of duplicating.
-
-## Feature and bug files
-
-`features/<name>.md` uses `skills/forge/templates/feature.md`.
-`bugs/BUG-<NNN>.md` uses `skills/forge/templates/bug.md`.
-
-Both have their own frontmatter with `keywords:` for index retrieval. `<NNN>` is zero-padded ascending (001, 002, ...).
-
-**`paths_involved`** is a mandatory field on `bugs/BUG-<NNN>.md` and `knowledge/pitfalls.md` entries — a list of files or directories where the bug/pitfall manifested. This field powers pre-flight warnings (see `recall.md` → "Pre-flight"): when Claude is about to edit any path listed in a bug or pitfall, forge surfaces the entry as a warning before the edit.
-
-## Session files (sessions/<date>-<topic>-<author-slug>.md)
-
-Written only when the session produced a project-level learning. Routine sessions don't produce a
-file. Content follows `templates/session.md`.
+## Session filename rule
 
 Filename: `<date>` (`YYYY-MM-DD`) + `<topic>` (2-4 word kebab-case slug) + `<author-slug>`.
 
