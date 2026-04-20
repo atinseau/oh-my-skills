@@ -2,16 +2,18 @@
 
 How to write to `.forge/`. The goal is compact, deduped, keyword-indexed entries — not a diary. Forge is a knowledge base, not a log.
 
-## Pick the template
+## Pick the template and schema
 
-| Trigger | Template | Destination |
-|---|---|---|
-| Feature completed | `templates/feature.md` | `features/<name>.md` |
-| Bug resolved | `templates/bug.md` | `bugs/BUG-<NNN>.md` |
-| Pattern surfaced | `templates/pattern.md` | appended entry in `knowledge/patterns.md` |
-| Pitfall discovered | (inline frontmatter + body) | appended entry in `knowledge/pitfalls.md` |
-| Decision made | `templates/decision.md` | appended entry in `knowledge/decisions.md` |
-| Memorable session | `templates/session.md` | `sessions/<date>-<topic>-<author-slug>.md` |
+For each trigger, load **only** the matching template (copy-paste blank) + schema (field details). Do not load all 8 schemas.
+
+| Trigger | Template | Schema | Destination |
+|---|---|---|---|
+| Feature completed | `templates/feature.md` | `schemas/feature.md` | `features/<name>.md` |
+| Bug resolved | `templates/bug.md` | `schemas/bug.md` | `bugs/BUG-<NNN>.md` |
+| Pattern surfaced | `templates/pattern.md` | `schemas/pattern.md` | appended entry in `knowledge/patterns.md` |
+| Pitfall discovered | (inline — see `schemas/pitfall.md`) | `schemas/pitfall.md` | appended entry in `knowledge/pitfalls.md` |
+| Decision made | `templates/decision.md` | `schemas/decision.md` | appended entry in `knowledge/decisions.md` |
+| Memorable session | `templates/session.md` | `schemas/session.md` | `sessions/<date>-<topic>-<author-slug>.md` |
 
 When both a feature/bug file AND a session file would be written for the same work, **prefer the feature/bug file**. The session log is redundant — skip it. A session file is only written when the work is memorable but did not complete a specific feature or fix a specific bug.
 
