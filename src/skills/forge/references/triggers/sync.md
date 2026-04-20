@@ -27,4 +27,4 @@ If either probe returns non-empty:
    - Entries in `.forge/modules/` whose `path:` no longer exists: set `status: removed` (keep file for keyword history).
    - Do NOT re-enrich existing non-seeded module entries.
    - Update `last_consolidation` to now.
-4. If **no** — record staleness in the current session log under `## Known staleness`. Proceed.
+4. If **no** — if a session file will be written later in the cycle, add a `## Known staleness` section to it listing the detected changes verbatim. If no session file is expected (nothing memorable in this cycle), skip silently — the next consolidation will re-detect the drift. Proceed with LOAD on known-stale memory either way.

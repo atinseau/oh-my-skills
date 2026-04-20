@@ -4,7 +4,7 @@
 
 **Action:**
 1. Read `.forge/knowledge/pitfalls.md` (if it exists) — apply semantic dedup.
-2. If present, UPDATE (add a note or refine the workaround). Otherwise, APPEND a new entry with frontmatter (`name`, `keywords`, `paths_involved: [<files/modules where this applies>]`) and body. Target 10-25 lines.
+2. If present, UPDATE (add a note or refine the workaround). Otherwise, APPEND a new entry with frontmatter (`name`, `keywords`, `paths_involved: [<files/modules where this applies>]`, `date: <ISO>`) and body. Target 10-25 lines. See `skills/forge/entities/pitfall.md` for the full schema.
 3. If the pitfall produced or was caused by a concrete bug that was then fixed: ALSO write `.forge/bugs/BUG-<NNN>.md` using `skills/forge/entities/bug.md` (schema + blank; find next ascending number). The bug file and pitfall entry cross-reference each other.
 4. Update `.forge/index.md` — `## Pitfalls` and `## Open Bugs` as applicable.
 5. Update `last_consolidation`.

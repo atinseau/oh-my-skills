@@ -88,7 +88,7 @@ Re-enrichment (drifted modules) follows the same procedure.
 
 - Module path no longer exists on disk (deleted, renamed).
 - Task only peripherally references the module (low-relevance score).
-- Module was enriched in the last 7 days AND `git log --since="7 days ago" -- <path>` shows no recent commits.
+- The module entry is already non-seeded (enriched in a prior cycle) AND `git log --since="7 days ago" -- <path>` shows no recent commits (no reason to re-enrich).
 
 ## Cross-checks
 

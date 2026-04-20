@@ -23,6 +23,6 @@
    - Frontmatter: `languages:`, `frameworks:`, `package_manager:`, `build_cmd:`, `test_cmd:`, `lint_cmd:` (leave empty if nothing inferred — do not guess), `detected_at: <ISO>`, `last_consolidation: <same ISO>`.
    - Body: 3-8 sentences condensing what distinguishes this project (stack specifics, structure, non-obvious conventions spotted during the sniff).
 7. **Seed `modules/<name>.md` stubs** for the top 3-5 hot-spot directories (`seeded: true`, `path:`, nothing else).
-8. **Seed `knowledge/decisions.md`** with 1-3 entries inferring architectural choices (e.g. "JWT over NextAuth — inferred from custom `lib/jwt.ts` and absence of `next-auth` in deps"). Mark these as inferred: `created: <ISO>`, `inferred: true` in frontmatter — user can later confirm or correct.
+8. **Seed `knowledge/decisions.md`** with 1-3 inferred architectural choices ONLY when evidence of an alternative being weighed is visible (custom `lib/jwt.ts` + absence of `next-auth` → "chose custom JWT over NextAuth"). Mark as `inferred: true` in frontmatter; user can later confirm or correct. Do NOT infer decisions on greenfield projects with < 10 commits or no clear counterfactual — inferring "chose React" from `package.json` is not a real decision, just an observation.
 9. **Write `.forge/index.md`** with `updated: <ISO>` frontmatter and sections populated from steps 7-8.
 10. **Stop on budget exhaustion:** if 25 file reads are consumed before step 8, proceed to step 9 with what exists. Bootstrap is bounded; rest accumulates via other triggers.

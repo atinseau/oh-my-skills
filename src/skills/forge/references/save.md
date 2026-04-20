@@ -8,12 +8,14 @@ For each trigger, load **only** the matching entity file (`entities/<name>.md`) 
 
 | Trigger | Entity file | Destination |
 |---|---|---|
-| Feature completed | `entities/feature.md` | `.forge/features/<name>.md` |
-| Bug resolved | `entities/bug.md` | `.forge/bugs/BUG-<NNN>.md` |
-| Pattern surfaced | `entities/pattern.md` | appended entry in `.forge/knowledge/patterns.md` |
-| Pitfall discovered | `entities/pitfall.md` | appended entry in `.forge/knowledge/pitfalls.md` |
-| Decision made | `entities/decision.md` | appended entry in `.forge/knowledge/decisions.md` |
-| Memorable session | `entities/session.md` | `.forge/sessions/<date>-<topic>-<author-slug>.md` |
+| Trigger 2 — Feature completed | `entities/feature.md` | `.forge/features/<name>.md` |
+| Trigger 3 — Pattern surfaced | `entities/pattern.md` | appended entry in `.forge/knowledge/patterns.md` |
+| Trigger 4 — Pitfall discovered | `entities/pitfall.md` | appended entry in `.forge/knowledge/pitfalls.md` |
+| Trigger 4 (side-write) — Pitfall produced a concrete bug | `entities/bug.md` | `.forge/bugs/BUG-<NNN>.md` |
+| Trigger 5 — Decision made | `entities/decision.md` | appended entry in `.forge/knowledge/decisions.md` |
+| Memorable session (any trigger + learning worth preserving) | `entities/session.md` | `.forge/sessions/<date>-<topic>-<author-slug>.md` |
+
+Bugs are NOT a standalone trigger — they only arise as a side-write when a pitfall (Trigger 4) corresponds to a concrete bug that was fixed (see `triggers/pitfall.md` step 3).
 
 When both a feature/bug file AND a session file would be written for the same work, **prefer the feature/bug file**. The session log is redundant — skip it. A session file is only written when the work is memorable but did not complete a specific feature or fix a specific bug.
 
