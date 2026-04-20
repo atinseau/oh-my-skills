@@ -58,7 +58,7 @@ Forge is orthogonal to:
 - `test-driven-development` — use this for TDD loops
 - `systematic-debugging` — use this for bug investigation
 - `verification-before-completion` — use this before claiming done
-- `requesting-code-review` / `receiving-code-review` — use these for review discipline (forge feeds pitfalls to reviewers via the pre-flight mechanism)
+- `requesting-code-review` / `receiving-code-review` — use these for review discipline. Forge can best-effort surface relevant pitfalls/bugs in the review request body (see `recall.md` → "Code review"), but the review skill itself is not aware of forge — effectiveness depends on the dispatched reviewer honouring the inline checklist.
 - `writing-plans` / `executing-plans` / `subagent-driven-development` — use these for multi-step tasks
 
 Forge does not replicate any of these. It remembers what they produce and surfaces it when relevant.

@@ -49,6 +49,16 @@ If no entries match `P`, skip this mode silently. Pre-flight is additive, not a 
 
 **Why `paths_involved` matters:** without it, pre-flight has nothing to match on and degrades to pure keyword recall (which may miss path-specific learnings). Save discipline requires populating `paths_involved` on every bug and pitfall — see `save.md`.
 
+### Limits of pre-flight — DO NOT treat as a safety guarantee
+
+Pre-flight is **path-based, not semantic**. It only fires when the target file path `P` literally matches an entry's `paths_involved` (or an ancestor). Concretely:
+
+- **Won't catch:** editing `src/components/LoginForm.tsx` while a pitfall exists on `src/auth/session.ts` — even if the bug is semantically related (component calls into the auth module). Different paths = no warning.
+- **Won't catch:** renamed files. If `paths_involved: [src/auth/old.ts]` and the file has been renamed to `src/auth/new.ts`, the match fails silently.
+- **Won't catch:** cross-file regressions. A bug fixed in file A can be recreated in file B if B now holds the same logic — pre-flight reads only the target path.
+
+**Rule for the agent:** "no pre-flight warning" means "no keyword-indexed entry matches this path". It does NOT mean "this edit is safe". Combine pre-flight with Mode 1 (proactive recall by keyword) — both together catch more than either alone. And do not suppress normal reasoning ("is this change risky? what could break?") just because pre-flight was silent.
+
 ## Mode 3 — Reactive (user query)
 
 When the user references past work: "how did we...", "what was the decision on...", "last time we did...", "like we did in...".
@@ -98,19 +108,25 @@ Beyond the primary keyword-matched files, these categorical loads fire when the 
 - Stop reading once relevant sections are found.
 - A cross-check producing no matching content is valid. Do not force connections.
 
-## Code-review integration (special case of cross-check)
+## Code review — best-effort memory surfacing
 
-When the agent is about to request a code review (via `superpowers:requesting-code-review`) OR is performing a review:
+**Status: best-effort, not enforced by a sibling skill.** `superpowers:requesting-code-review` does not currently know about forge. The mechanism below is what the agent can do from forge's side alone; whether the downstream reviewer honours it depends on where the review runs.
+
+When the agent is about to request a code review OR is performing a self-review:
 
 1. Compute the set of files touched by the diff.
 2. For each file, scan `.forge/bugs/BUG-*.md` and `.forge/knowledge/pitfalls.md` for `paths_involved` overlap.
-3. Compile the matching entries into a "forge memory checklist" and include it in the review request context:
-   > **Forge memory — check the diff against these prior findings for `<path>`:**
-   > - BUG-042 (session-expiry race condition)
-   > - Pitfall: edge-runtime-cookies
-4. The reviewer (self-review, code-reviewer subagent, or human) must explicitly confirm the diff doesn't regress any listed item.
+3. If matches exist, surface them in the review request message body BEFORE dispatching the reviewer:
+   > **Forge memory — prior findings for the modified paths:**
+   > - BUG-042 (session-expiry race condition) — `src/auth/session.ts`
+   > - Pitfall: edge-runtime-cookies — `src/auth/`
 
-This makes `.forge/` memory an active guard-rail in review, not just documentation.
+**What this does NOT guarantee:**
+- The `code-reviewer` subagent runs with its own fresh context. If the dispatch message body doesn't include the checklist explicitly, the reviewer never sees it.
+- Human reviewers who read the PR won't see forge's checklist unless it's posted as a PR comment.
+- A subagent reviewer with no awareness of forge may ignore the checklist even when included.
+
+**Agent responsibility:** include the forge-memory block **in the prompt body** of the review request, prefixed with "Please verify the diff does not regress any of the following:". This is the only hook we have. Do not claim to the user that "forge checks reviews" unless the checklist is actually in the dispatched prompt.
 
 ## What recall does NOT do
 
