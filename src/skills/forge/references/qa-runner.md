@@ -10,6 +10,50 @@ On the first Step 5 (QA) pass where `.forge/qa/index.md` does not exist, stop an
 
 Do not shortcut this. A strategy that takes two minutes to write is not a strategy.
 
+## Minimum viable first pass
+
+The first Step 5 pass on a brand-new project does not have to produce the complete strategy in one shot. A **minimum-viable** `qa/index.md` is acceptable on the first pass if and only if:
+
+1. Question 1 (app nature) is answered concretely.
+2. Exactly ONE primary flow is defined with a concrete pass/fail criterion.
+3. The tooling to execute that one flow is present in `.forge/qa/` and has been run successfully at least once.
+4. The remaining six discipline questions (user journey, host-tools inventory, strategy justification, tooling map, per-flow criteria, extensibility plan) are present as **explicit `TODO (next cycle)` markers** in the file.
+
+This concession exists so the user's first task is not held hostage to QA infrastructure design. It is not a permanent skip — the next cycle's Step 5 MUST resolve every TODO marker. If it does not, JUDGE (Step 6) fails.
+
+**What it is not:** the minimum-viable pass is not "write a one-liner and move on". The one defined flow is real, tested, and persisted. The deferred items are scheduled, not skipped.
+
+Example minimum-viable `qa/index.md` on the first cycle for a Next.js login page:
+
+~~~markdown
+---
+strategy: minimum-viable
+created: <ISO date>
+---
+
+## App nature
+Web UI — Next.js 15 App Router with server actions.
+
+## Primary flow: login-happy-path
+- User navigates to /login
+- Enters a known-good email+password
+- Clicks Submit
+- Lands on /dashboard within 3s
+
+Script: `.forge/qa/scripts/login-happy-path.spec.ts` (Playwright).
+Pass criterion: `page.url() === "<host>/dashboard"` AND `page.getByText("Welcome").isVisible()`.
+
+## TODO (next cycle)
+- Question 2 — full user journey (beyond login)
+- Question 3 — host tools inventory (probe output recorded)
+- Question 4 — strategy justification (visual vs programmatic vs mixed)
+- Question 5 — tooling map (additional scripts for edit/delete/logout flows)
+- Question 6 — per-flow pass criteria for each additional flow
+- Question 7 — extensibility plan
+
+The next cycle MUST address every TODO above. JUDGE will fail otherwise.
+~~~
+
 ## Required discipline
 
 Answer the 7 questions below explicitly. Write the answers in `.forge/qa/index.md`. This file is the strategy — concrete, specific to this project, not generic.
@@ -100,6 +144,8 @@ Not mandatory — the agent can justify a different layout if the project warran
 - Spending two minutes on `qa/index.md` — if it was fast, it is wrong
 - Letting `qa/index.md` go stale while tasks evolve and new flows are added
 - Using QA scripts that require manual observation to determine pass/fail
+- Using the minimum-viable concession on anything other than the very first pass. The concession is a one-time starter, not an ongoing pattern.
+- Leaving `TODO (next cycle)` markers in `qa/index.md` past the next cycle. Unresolved TODOs from a prior cycle are a JUDGE failure.
 
 ## What this file is NOT
 

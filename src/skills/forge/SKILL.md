@@ -79,12 +79,14 @@ Execute the `test_cmd` from `.forge/config.md` frontmatter:
 
 - If `.forge/qa/index.md` does NOT exist:
   - Read `references/qa-runner.md`.
-  - **Invest time**: analyze the app, probe host tools, design a strategy (visual, programmatic, metric, or mixed).
-  - Create `.forge/qa/index.md` and any custom scripts/fixtures the strategy needs inside `.forge/qa/`.
-  - **Building the QA strategy on the first pass is NOT counted as an iteration failure.** It is setup work. Iterations count only from JUDGE failures onward.
+  - **First-pass rule:** on the *very first* cycle after bootstrap, a minimum-viable strategy is acceptable — one primary flow, one pass/fail criterion, explicit `TODO (next cycle)` markers for the remaining discipline questions. See `qa-runner.md` → "Minimum viable first pass".
+  - Otherwise (not the first cycle): invest the time and answer all 7 discipline questions before proceeding.
+  - Create `.forge/qa/index.md` and any custom scripts/fixtures the chosen flow needs inside `.forge/qa/`.
+  - **Building the QA strategy is NOT counted as an iteration failure.** It is setup work. Iterations count only from JUDGE failures onward.
 - If `.forge/qa/index.md` exists:
   - Follow the strategy.
-  - If insufficient for the current task, **extend** `qa/index.md` and the tooling. Never bypass.
+  - If `TODO (next cycle)` markers remain and this is NOT the cycle immediately following the minimum-viable pass, JUDGE will fail — resolve them first.
+  - If the strategy is insufficient for the current task, **extend** `qa/index.md` and the tooling. Never bypass.
 
 ## Step 6 — JUDGE
 
@@ -94,11 +96,12 @@ Evaluate three criteria:
 |---|---|---|
 | Build | Step 3 output | 0 errors |
 | Tests | Step 4 output | 100% pass |
-| QA | `.forge/qa/index.md` criterion per flow | objective pass |
+| QA | `.forge/qa/index.md` criterion per flow, **no unresolved `TODO (next cycle)` markers from a prior cycle** | objective pass |
 
 - **All pass** → Step 7.
 - **Any fail** → back to Step 2 with full context (which criterion, what error, relevant artefacts).
 - **5th failure** → stop. Document the blocker in `.forge/bugs/BUG-<NNN>.md` and inform the user.
+- If `qa/index.md` is marked `strategy: minimum-viable` from the *prior* cycle and still has `TODO (next cycle)` markers, that is a QA failure — return to Step 5 to complete the strategy before continuing the current task.
 
 ## Step 7 — MEMORIZE (mandatory)
 
