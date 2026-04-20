@@ -2,39 +2,30 @@
 
 How to write to `.forge/`. The goal is compact, deduped, keyword-indexed entries — not a diary. Forge is a knowledge base, not a log.
 
+MVP scope: the only save targets are pitfalls and bugs. See `triggers.md` → "Out of MVP scope" for what is intentionally NOT saved.
+
 ## Pick the entity file
 
 For each trigger, load **only** the matching entity file (`entities/<name>.md`) — it contains both the schema (field details) and the blank to copy.
 
 | Trigger | Entity file | Destination |
 |---|---|---|
-| Trigger 2 — Feature completed | `entities/feature.md` | `.forge/features/<name>.md` |
-| Trigger 3 — Pattern surfaced | `entities/pattern.md` | appended entry in `.forge/knowledge/patterns.md` |
-| Trigger 4 — Pitfall discovered | `entities/pitfall.md` | appended entry in `.forge/knowledge/pitfalls.md` |
-| Trigger 4 (side-write) — Pitfall produced a concrete bug | `entities/bug.md` | `.forge/bugs/BUG-<NNN>.md` |
-| Trigger 5 — Decision made | `entities/decision.md` | appended entry in `.forge/knowledge/decisions.md` |
-| Memorable session (any trigger + learning worth preserving) | `entities/session.md` | `.forge/sessions/<date>-<topic>-<author-slug>.md` |
+| Trigger 2 — Pitfall discovered | `entities/pitfall.md` | appended entry in `.forge/knowledge/pitfalls.md` |
+| Trigger 2 (side-write) — Pitfall produced a concrete bug that was fixed | `entities/bug.md` | `.forge/bugs/BUG-<NNN>.md` |
 
-Bugs are NOT a standalone trigger — they only arise as a side-write when a pitfall (Trigger 4) corresponds to a concrete bug that was fixed (see `triggers/pitfall.md` step 3).
+Bugs are NOT a standalone trigger — they only arise as a side-write when a pitfall (Trigger 2) corresponds to a concrete bug that was fixed (see `triggers/pitfall.md` step 3).
 
-When both a feature/bug file AND a session file would be written for the same work, **prefer the feature/bug file**. The session log is redundant — skip it. A session file is only written when the work is memorable but did not complete a specific feature or fix a specific bug.
-
-`knowledge/*.md` files are cumulative — entries are separated by `---` lines or `## <name>` headers. They are NOT one-file-per-entity like features and bugs.
+`knowledge/pitfalls.md` is cumulative — entries are separated by `---` lines. It is NOT one-file-per-entity like bugs.
 
 ## Compact discipline
 
 - Target line counts per entry:
-  - Feature: 15-30 lines
   - Bug: 20-35 lines
-  - Pattern: 10-25 lines
-  - Decision: 15-30 lines
   - Pitfall entry: 10-25 lines
-  - Session: 10-25 lines
 - No redundant fields. Do NOT write `## What was asked` — the agent already has the user's request in context.
-- No `## Iterations` section unless the session went through more than one iteration; if it did, add `iterations: N` in frontmatter and a short `## Iterations` block naming what changed.
 - Keywords are always present (3-6 terms). They are the contract that makes future recall work.
 - Ruthless brevity on bullet content: one line per point, no "I also realized that..." prose padding.
-- Include code only when the pattern / fix / decision cannot be expressed in prose. Keep snippets to 1-3 lines.
+- Include code only when the fix cannot be expressed in prose. Keep snippets to 1-3 lines.
 - Never duplicate information already captured in `context.md` (project stack, constraints, team conventions).
 - Do NOT repeat the bug description verbatim in `## Root cause` — summarise the cause, not the symptom.
 
@@ -71,31 +62,30 @@ Bug entries (`bugs/BUG-<NNN>.md`) and pitfall entries (`knowledge/pitfalls.md`) 
 
 Guidelines:
 - Be specific when possible (`src/auth/session.ts`) and broad when the pitfall applies module-wide (`src/auth/`).
-- Feature files MAY include `paths_involved` too (helps with cross-referencing) but it is not mandatory there.
-- Patterns and decisions do not use `paths_involved` — they apply to the whole project, not specific files.
+- Audit (`audit.md`) scans these fields to detect stale paths after renames or deletions. Keeping them accurate is what prevents silent memory rot.
 
 ## Deduplicate before save — semantic, not just keyword-overlap
 
 Keyword overlap alone is a weak dedup signal: "token-refresh-race" and "session-expiry-bug" might be the same concern under different names. Dedup is semantic: the agent must actively read candidate entries and decide.
 
-**Procedure for `patterns.md`, `pitfalls.md`, and `decisions.md`:**
+**Procedure for `pitfalls.md`:**
 
 1. Read the target file (if it exists).
-2. Find candidates: identify the top 3 entries that share ≥ 2 keywords with the new entry (or share `paths_involved` overlap for pitfalls).
+2. Find candidates: identify the top 3 entries that share ≥ 2 keywords with the new entry (or share `paths_involved` overlap).
 3. If candidates exist, read them fully (not just headers).
 4. For each candidate, explicitly classify:
-   - **Same concern** — the new finding is a refinement, additional context, or another occurrence of the same underlying issue/pattern/decision.
+   - **Same concern** — the new finding is a refinement, additional context, or another occurrence of the same underlying issue.
    - **Related but distinct** — different enough to warrant a separate entry; cross-reference in the new entry's body (`See also: <other-entry-name>`).
    - **Unrelated** — keyword overlap was coincidental.
 5. Classification drives action:
-   - **Same concern** → UPDATE conservatively: preserve original `created:` date and existing `## Pattern` / `## Why here` / `## Context` body. Append to `## Where applied` (patterns), extend `paths_involved` (pitfalls), add a refinement note, or refine the workaround. Do NOT rewrite the core body unless the original is wrong.
+   - **Same concern** → UPDATE conservatively: preserve original `date:` and existing body. Extend `paths_involved`, add a refinement note, or refine the workaround. Do NOT rewrite the core body unless the original is wrong.
    - **Related but distinct / Unrelated** → APPEND a new entry (separated by `---`). Add cross-references to related entries in the body.
 6. If step 3-5 reveals the new finding is actually a duplicate of something already well-captured: do NOT save. Skipping duplicates is a valid save outcome.
 
-**Procedure for `features/<name>.md` and `bugs/BUG-<NNN>.md` (per-entity files):**
+**Procedure for `bugs/BUG-<NNN>.md` (per-entity files):**
 
-- If a file with the same name/id already exists, UPDATE in place.
-- For bugs, increment `<NNN>` to the next ascending unused number.
+- If a file with the same `id:` already exists, UPDATE in place.
+- Otherwise, increment `<NNN>` to the next ascending unused number.
 
 **Deduplication is MANDATORY.** Skipping it clutters `.forge/` and dilutes future recalls.
 
@@ -107,9 +97,9 @@ This is the most important rule of save — forge is not a diary.
 - Typo fix, formatting change, mechanical rename, pure refactor without new insight.
 - The "learning" would be a generic programming observation ("arrow functions are concise") rather than project-specific ("in this project, all auth routes must go through `lib/session.ts:verify`").
 - The user marked the task as quick-and-dirty / throwaway.
-- A no-op cycle (task was trivial, memory is already rich on this area).
+- The learning belongs in a different source of truth — see `triggers.md` → "Out of MVP scope" for the mapping. MVP forge captures pitfalls + bugs only.
 
-If nothing is memorable, NO session file is written for that cycle. Forge is a knowledge base, not a journal.
+If nothing is memorable, NO file is written for that cycle. Forge is a knowledge base, not a journal.
 
 ## After save
 
@@ -118,11 +108,3 @@ Always, after any write to `.forge/`:
 1. Update `.forge/index.md` — regenerate the relevant section(s) from the new content. Set the frontmatter `updated:` field to today's ISO date. The index is derived; never hand-edit.
 2. Update `last_consolidation` in `.forge/context.md` frontmatter to the current ISO date.
 3. Do NOT git commit — the user commits when they're ready. Forge writes files; it does not push them.
-
-## Session file specifics
-
-- Filename pattern: `sessions/<date>-<topic>-<author-slug>.md`.
-- `<author-slug>` derivation: `git config user.email`, take the part before `@`, lowercase, replace non-alphanumerics with `-`, truncate to 20 chars. Fallback: `unknown`.
-- Session files are per-author — eliminates collisions when multiple devs work on the same branch the same day.
-- Content: use `entities/session.md` → "Blank" section. Minimal: frontmatter + `## Learnings` + `## Follow-ups`. No `## What was asked`.
-- Only write a session file if the session produced something memorable (trigger the save path). A no-op session produces nothing.

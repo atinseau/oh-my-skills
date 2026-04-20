@@ -9,7 +9,7 @@ Used by: `.forge/context.md` (single file at root of memory).
 - `package_manager: <name>` — e.g. bun, npm, pnpm
 - `build_cmd`, `test_cmd`, `lint_cmd` — empty string is valid
 - `detected_at: <ISO 8601 date>` — bootstrap time, never changes
-- `last_consolidation: <ISO 8601 date>` — updated on every forge write; drives the sync/desync trigger
+- `last_consolidation: <ISO 8601 date>` — updated on every forge write; timestamp of the last memory mutation
 
 ## Body
 

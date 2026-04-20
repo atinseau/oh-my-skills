@@ -31,7 +31,9 @@
 			"Bash(cp /Users/arthur/Documents/Dev/projects/oh-my-skills/scripts/install.sh ~/.oh-my-skills/scripts/install.sh)",
 			"Bash(npm view:*)",
 			"Skill(update-config)",
-			"Skill(update-config:*)"
+			"Skill(update-config:*)",
+			"Bash(awk '/^## Step 7 — MEMORIZE/,/^## /' src/skills/forge/SKILL.md)",
+			"Bash(bun biome *)"
 		]
 	},
 	"enabledPlugins": {
