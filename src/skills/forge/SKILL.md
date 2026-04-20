@@ -26,7 +26,7 @@ Read `references/memory-system.md` for rules.
 1. Read `.forge/index.md`.
 2. From the user's task, match keywords against `architecture/modules.md` (primary), `knowledge/pitfalls.md` (bug keywords), and `bugs/` entries (known issues).
 3. Read only the relevant memory files.
-4. Read the source of the identified modules.
+4. Read the source of the identified modules. If a matched module entry is marked `seeded: true`, first run lazy enrichment — see `references/memory-system.md` → "Lazy module discovery". Enrich the entry, regenerate `index.md`, then proceed with reading the module source.
 5. Read the most recent session log for continuity.
 
 **Never read the entire codebase.** The index is the entry point.

@@ -81,26 +81,38 @@ Ask the user which profile owns the build. Present the options clearly. Do not g
 
 After the owning profile is selected, resolve any remaining `<placeholder>` values in the chosen commands. Inspect the project first; ask the user only if the value is ambiguous.
 
-## Phase 4 — Architectural scan
+## Phase 4 — Architectural seed (minimal)
 
-Identify the primary modules of the project. This scan is bounded — read a handful of files per module to infer role, not entire subtrees.
+Bootstrap does NOT try to understand every module up front. It writes a **seed** — a list of candidate modules with just `name` and `path`. Role inference, keywords, and key-file lists are filled in lazily, during the first LOAD step that touches the module (see `references/memory-system.md` → "Lazy module discovery").
 
-**Candidate roots** (check which exist):
-`src/`, `app/`, `lib/`, `Sources/`, `pkg/`, `cmd/`, `internal/`, `packages/*/src/`
+### Seed procedure
 
-**Module identification:**
-For each candidate root that exists, group files by immediate subdirectory. Each subdirectory is a candidate module. For flat roots with no subdirectories, the root itself is one module.
+1. Check the candidate roots (first hit wins, do not merge):
+   `src/`, `app/`, `lib/`, `Sources/`, `pkg/`, `cmd/`, `internal/`, `packages/*/src/`
 
-**Per module, collect:**
-- `name` — subdirectory name (or root name if flat)
-- `path` — relative path from project root
-- `role` — inferred from file names, exported symbols, or package manifest description (read 1-3 files)
-- `key_files` — the public entry point (e.g. `index.ts`, `main.go`, `mod.rs`) and 1-2 most-referenced files
-- `keywords` — 3-6 terms drawn from filenames, top-level symbols, and manifest description
+2. In the chosen root, list **immediate subdirectories only**. Each subdirectory becomes a seed module. If the root is flat (no subdirectories, just files), the root itself is one seed module.
 
-Write `.forge/architecture/modules.md` using the template at `skills/forge/templates/module.md`.
+3. For each seed module, collect:
+   - `name` — subdirectory name (or root name if flat)
+   - `path` — relative path from project root
+   - `seeded: true` — frontmatter marker indicating the entry is a seed, not a full description
 
-Limit: if a project has more than 20 candidate modules, group minor ones under an `other` module rather than listing every package individually.
+   Do NOT read any file content. Do NOT infer roles or keywords at this stage.
+
+4. Cap: if more than **12 seed modules** are produced, keep the first 12 by lexical order and add one `other` entry at the bottom:
+
+~~~markdown
+## other
+path: (multiple)
+seeded: true
+note: Remaining N modules to be discovered lazily at LOAD. See `references/memory-system.md`.
+~~~
+
+5. Write `.forge/architecture/modules.md` using the seed format — a flat list of `## <name>` blocks, each with `path:`, `seeded: true`, and nothing else.
+
+### Rationale
+
+On a 500-file project, the seed pass produces a ~30-line `modules.md` in under 5 tool calls. Full module entries are built only when the user's task demands them. This preserves the memory-over-scan principle at the scale where it matters most.
 
 ## Phase 5 — Write .forge/
 

@@ -9,7 +9,7 @@
 ├── index.md                          # Table of contents (max 100 lines, derived)
 ├── config.md                         # Active profiles + resolved commands + bootstrap reasoning
 ├── architecture/
-│   └── modules.md                    # Module map with keywords
+│   └── modules.md                    # Module map — seeded at bootstrap, enriched lazily at LOAD
 ├── knowledge/
 │   ├── pitfalls.md                   # Traps discovered + solutions (cumulative)
 │   └── dependencies.md              # External libs, why, gotchas (cumulative)
@@ -31,6 +31,33 @@
 5. Read the source files of the identified modules (listed in `architecture/modules.md`).
 
 **Rule: never read the entire codebase.** The memory system replaces full scans. If a module is not in `modules.md`, it does not exist for this task.
+
+## Lazy Module Discovery
+
+Bootstrap writes seed entries in `architecture/modules.md` — just `name` + `path` + `seeded: true`. The LOAD step enriches these entries on demand.
+
+### When to enrich
+
+During LOAD step 2 (keyword matching), if the user's task references a module that exists only as a seed:
+
+1. Read the module's `path` listed in the seed entry.
+2. List the files in that directory (one level deep).
+3. Read 2-3 representative files to infer the role (the public entry point, the largest file, or files named like `index.*`, `main.*`, `mod.rs`, `lib.rs`).
+4. Extract 3-6 keywords from filenames + top-level symbols + any local README.
+5. Rewrite the module's entry in `architecture/modules.md` — drop `seeded: true`, add `role:`, `key_files:`, `keywords:`.
+6. Regenerate `.forge/index.md` so the index reflects the enriched entry.
+
+### When to skip enrichment
+
+If LOAD's keyword match already resolves to a module whose entry is NOT seeded (it was enriched in a prior cycle), no work is needed — use the existing entry.
+
+### When to create new modules
+
+If the user's task references a directory that is NOT in `modules.md` at all (even as a seed — e.g. it was swallowed by the `other` bucket), create the entry from scratch using the same 5-step enrichment procedure. Add it under the correct root.
+
+### Budget
+
+Enrichment reads are bounded: at most 5 files per module on first enrichment. If more is needed to understand the module, that is a signal the module is too large and may warrant a split (architecture-guard rule #1).
 
 ## MEMORIZE Phase
 
