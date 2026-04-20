@@ -26,7 +26,7 @@ Read `references/memory-system.md` for rules.
 1. Read `.forge/index.md`.
 2. From the user's task, match keywords against `architecture/modules.md` (primary), `knowledge/pitfalls.md` (bug keywords), and `bugs/` entries (known issues).
 3. Read only the relevant memory files.
-4. Read the source of the identified modules. If a matched module entry is marked `seeded: true`, first run lazy enrichment — see `references/memory-system.md` → "Lazy module discovery". Enrich the entry, regenerate `index.md`, then proceed with reading the module source.
+4. Read the source of the identified modules. If a matched module entry is marked `seeded: true`, first run lazy enrichment — see `references/memory-system.md` → "Lazy module discovery". Enrich the entry, regenerate `index.md`, then proceed with reading the module source. (Mid-cycle `index.md` regeneration is allowed here specifically for lazy enrichment; regeneration remains mandatory at MEMORIZE — see Step 7.)
 5. Read the most recent session log for continuity.
 
 **Never read the entire codebase.** The index is the entry point.
@@ -89,7 +89,7 @@ Some runners (`jest --passWithNoTests`, `cargo test` on a crate with no tests) e
 
 ### Case D — `test_cmd` runs but reports "no tests found" with exit code != 0
 
-Distinguish this from a real failure by the run's stderr/stdout. If the output matches patterns like `no tests found`, `no test target`, or `test suite is empty` AND no assertion failure is present, treat as Case B (empty test suite). Otherwise treat as Case A failures.
+Distinguish this from a real failure by the run's stderr/stdout. Common "no tests" phrases across runners: `no tests found`, `no test target`, `test suite is empty`, `No test files found` (vitest), `[no test files]` (go), `no tests ran` (pytest), `no tests to run` (cargo). If the output matches one of these AND no assertion failure is present AND no panic/exception trace is present, treat as Case B. **When in doubt, prefer Case A (treat as failure)** — a masked real failure is strictly worse than a misclassified empty test suite.
 
 ## Step 5 — QA
 
@@ -97,8 +97,9 @@ Distinguish this from a real failure by the run's stderr/stdout. If the output m
 
 - If `.forge/qa/index.md` does NOT exist:
   - Read `references/qa-runner.md`.
-  - **First-pass rule:** on the *very first* cycle after bootstrap, a minimum-viable strategy is acceptable — one primary flow, one pass/fail criterion, explicit `TODO (next cycle)` markers for the remaining discipline questions. See `qa-runner.md` → "Minimum viable first pass".
-  - Otherwise (not the first cycle): invest the time and answer all 7 discipline questions before proceeding.
+  - **First-pass rule:** the minimum-viable strategy is available ONLY when `.forge/sessions/` contains zero entries with `result: pass` (i.e., no cycle has ever completed MEMORIZE in this project). Count the session files programmatically; do not infer from the absence of `qa/index.md` alone — deleting `qa/index.md` does not re-enable the concession.
+  - When eligible: produce one primary flow with a concrete pass/fail criterion, and explicit `TODO (next cycle)` markers for the remaining discipline questions. See `qa-runner.md` → "Minimum viable first pass".
+  - When ineligible (any session with `result: pass` exists): invest the time and answer all 7 discipline questions before proceeding.
   - Create `.forge/qa/index.md` and any custom scripts/fixtures the chosen flow needs inside `.forge/qa/`.
   - **Building the QA strategy is NOT counted as an iteration failure.** It is setup work. Iterations count only from JUDGE failures onward.
 - If `.forge/qa/index.md` exists:
@@ -119,7 +120,7 @@ Evaluate three criteria:
 - **All pass** → Step 7.
 - **Any fail** → back to Step 2 with full context (which criterion, what error, relevant artefacts).
 - **5th failure** → stop. Document the blocker in `.forge/bugs/BUG-<NNN>.md` and inform the user.
-- If `qa/index.md` is marked `strategy: minimum-viable` from the *prior* cycle and still has `TODO (next cycle)` markers, that is a QA failure — return to Step 5 to complete the strategy before continuing the current task.
+- `strategy: minimum-viable` is valid for exactly one cycle. If `qa/index.md` still carries `strategy: minimum-viable` OR any `TODO (next cycle)` marker when the current session differs from the session that created it, that is a QA failure — return to Step 5, resolve every TODO, and remove the `strategy: minimum-viable` marker before continuing. Rewriting the markers to restart the clock is explicitly forbidden.
 - When Tests is `N/A`, JUDGE still requires Build and QA to pass. A cycle with `N/A` tests is valid; it is not a degraded pass.
 
 ## Step 7 — MEMORIZE (mandatory)

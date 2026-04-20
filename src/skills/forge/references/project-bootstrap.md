@@ -99,7 +99,7 @@ Bootstrap does NOT try to understand every module up front. It writes a **seed**
 
    Do NOT read any file content. Do NOT infer roles or keywords at this stage.
 
-4. Cap: if more than **12 seed modules** are produced, keep the first 12 by lexical order and add one `other` entry at the bottom:
+4. Cap: if more than **12 seed modules** are produced, keep the first 12 by POSIX `LC_ALL=C` lexical order (case-sensitive ASCII sort of subdirectory names) and add one `other` entry at the bottom:
 
 ~~~markdown
 ## other

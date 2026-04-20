@@ -14,9 +14,10 @@ Do not shortcut this. A strategy that takes two minutes to write is not a strate
 
 The first Step 5 pass on a brand-new project does not have to produce the complete strategy in one shot. A **minimum-viable** `qa/index.md` is acceptable on the first pass if and only if:
 
+0. **Eligibility gate:** `.forge/sessions/` contains zero entries with `result: pass` — i.e. no cycle has ever completed MEMORIZE in this project. This is the operational definition of "first pass". Deleting `qa/index.md` does NOT re-enable the concession; the session history is the authoritative marker.
 1. Question 1 (app nature) is answered concretely.
 2. Exactly ONE primary flow is defined with a concrete pass/fail criterion.
-3. The tooling to execute that one flow is present in `.forge/qa/` and has been run successfully at least once.
+3. The tooling to execute that one flow is present in `.forge/qa/` and has been run successfully at least once **against the real target** (the actual app/CLI/API) — not a stub, mock, or dry run. A script that only logs "ran" is not tooling.
 4. The remaining six discipline questions (user journey, host-tools inventory, strategy justification, tooling map, per-flow criteria, extensibility plan) are present as **explicit `TODO (next cycle)` markers** in the file.
 
 This concession exists so the user's first task is not held hostage to QA infrastructure design. It is not a permanent skip — the next cycle's Step 5 MUST resolve every TODO marker. If it does not, JUDGE (Step 6) fails.

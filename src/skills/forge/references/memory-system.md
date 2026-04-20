@@ -44,7 +44,7 @@ During LOAD step 2 (keyword matching), if the user's task references a module th
 2. List the files in that directory (one level deep).
 3. Read 2-3 representative files to infer the role (the public entry point, the largest file, or files named like `index.*`, `main.*`, `mod.rs`, `lib.rs`).
 4. Extract 3-6 keywords from filenames + top-level symbols + any local README.
-5. Rewrite the module's entry in `architecture/modules.md` — drop `seeded: true`, add `role:`, `key_files:`, `keywords:`.
+5. Rewrite the module's entry in `architecture/modules.md` — drop `seeded: true`, add `role:`, `key_files:`, `keywords:` as body lines inside the `## <name>` section (not as YAML frontmatter — `modules.md` is a shared file; per-module frontmatter blocks are not used).
 6. Regenerate `.forge/index.md` so the index reflects the enriched entry.
 
 ### When to skip enrichment
@@ -57,7 +57,7 @@ If the user's task references a directory that is NOT in `modules.md` at all (ev
 
 ### Budget
 
-Enrichment reads are bounded: at most 5 files per module on first enrichment. If more is needed to understand the module, that is a signal the module is too large and may warrant a split (architecture-guard rule #1).
+Enrichment reads are bounded: at most 5 files per module on first enrichment. The same 5-file cap applies to re-enrichment (when a module grows and its entry needs an update). If more is needed to understand the module, that is a signal the module is too large and may warrant a split (architecture-guard rule #1).
 
 ## MEMORIZE Phase
 
@@ -74,8 +74,8 @@ When creating new memory files, copy the corresponding template from `skills/for
 
 ## File Format Rules
 
-1. **One file = one subject** — one module, one bug, one feature, one session per file.
-2. **Every file has a `keywords:` frontmatter** — this is the contract that makes `index.md` useful.
+1. **One file = one subject** — one bug, one feature, one session per file. `architecture/modules.md` is the single exception: one file with many module blocks, where each module is a `## <name>` section.
+2. **Every per-entity file has `keywords:` in frontmatter** — applies to `bugs/BUG-<NNN>.md`, `features/<name>.md`, `sessions/<date>-<topic>.md`. In `architecture/modules.md`, each enriched module block lists `keywords:` as a body line inside its `## <name>` section; seeded blocks omit keywords until enrichment. Either form is the contract that makes `index.md` useful.
 3. **`index.md` is derived, never hand-edited** — regenerated each MEMORIZE phase.
 4. **Sessions are append-only** — one file per session, never overwritten mid-session.
 5. **`knowledge/pitfalls.md` and `knowledge/dependencies.md` are cumulative** — new entries are appended, old entries are never removed.
