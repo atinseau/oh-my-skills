@@ -63,8 +63,11 @@ Integration tests in Alpine Docker containers via testcontainers. Lifecycle scri
 ```
 src/skills/<name>/
 ├── SKILL.md          # Entry point (required)
-└── references/       # Optional subdirectory referenced by SKILL.md
+├── references/       # Optional — long-form docs referenced by SKILL.md
+└── templates/        # Optional — reusable content templates (e.g. memory files, session logs)
 ```
+
+Optional subdirectories are not prescribed; skills may also use `profiles/`, `flows/`, etc. if warranted. Keep SKILL.md as the single entry point: references and templates are loaded only when SKILL.md instructs the agent to.
 
 **Required frontmatter in SKILL.md:**
 ```yaml

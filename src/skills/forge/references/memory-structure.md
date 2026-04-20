@@ -143,6 +143,17 @@ non-alphanumeric characters with `-`, truncate to 20 characters. Fallback: `unkn
 
 The author-slug eliminates concurrent-session collisions on shared branches.
 
+## Security: what NOT to put in `.forge/`
+
+`.forge/` is committed to git. Anything in it ends up in the repo's history and becomes public for public repos. Treat it accordingly:
+
+- **Never copy-paste verbatim user prompts into session logs, bug descriptions, or learnings.** Prompts can contain API tokens, access keys, internal URLs, customer data, or other secrets the user pasted while discussing a problem. Paraphrase the user's intent instead: write "user asked for a session-expiry fix" rather than dumping the conversation.
+- **Never include credentials, tokens, connection strings, or environment values in any `.forge/` file.** If a bug or pitfall concerns a secret being mishandled, describe the concern abstractly ("JWT signing key was logged by X") — do not paste the actual key.
+- **Paths and module structure in `paths_involved` and `modules/*.md` are generally fine** for internal projects, but note that they leak architectural information. For closed-source projects that publish `.forge/` upstream (e.g. open-source drift from private fork), review what's committed.
+- **`.forge/qa/` (if introduced later)** would be an exception — screenshots, fixtures, and snapshots may contain private data. For now `.forge/qa/` is out of scope, but the same rule applies when it comes back.
+
+If uncertain about whether an entry is safe to commit, write it locally first (outside `.forge/`), then distill the non-sensitive learning into the proper file. When in real doubt, add `.forge/sessions/` to `.gitignore` for that project — you lose continuity across machines but gain privacy.
+
 ## Merge Conflicts
 
 - **`index.md`** — discard both sides, regenerate from the rest of `.forge/` (walk directories,
