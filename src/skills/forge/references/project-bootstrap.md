@@ -127,7 +127,8 @@ profiles: [<matched profile names, or empty array>]
 build_cmd: <resolved command — must be present>
 test_cmd: <resolved command or empty string>   # Empty is valid: project has no test suite yet. See SKILL.md Step 4 Case B.
 lint_cmd: <resolved command or empty string>
-detected_at: <ISO 8601 date>
+detected_at: <ISO 8601 date — bootstrap time, never changes>
+last_consolidation: <ISO 8601 date — updated at every MEMORIZE; drives desync detection at LOAD>
 ---
 ```
 
@@ -153,6 +154,7 @@ build_cmd: next build
 test_cmd: jest --passWithNoTests
 lint_cmd: eslint . --ext .ts,.tsx
 detected_at: 2026-04-18T00:00:00Z
+last_consolidation: 2026-04-18T00:00:00Z
 ---
 
 ## Why these profiles

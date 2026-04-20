@@ -23,6 +23,20 @@ Check if `.forge/index.md` exists in the project root.
 
 Read `references/memory-system.md` for rules.
 
+**Desync probe (runs before LOAD proper):**
+
+1. Read `last_consolidation` from `.forge/config.md` frontmatter.
+2. Run `git log --oneline --since="<last_consolidation>" -- . ":(exclude).forge/"` to list commits that changed code since the last forge cycle completed.
+3. Run `git diff --name-only "<last_consolidation>"..HEAD -- package.json Cargo.toml Package.swift pyproject.toml go.mod Gemfile pom.xml build.gradle composer.json` (omit any manifest that does not exist in this project) to catch manifest mutations.
+4. If either command returns non-empty output:
+   - Summarise the changes in one short paragraph (N commits, which manifests changed).
+   - Ask the user: *"Memory was last consolidated on `<last_consolidation>`. Do you want me to refresh dependencies and module listings before proceeding? (y/n)"*
+   - If **yes**: run the bounded refresh from `references/memory-system.md` → "Desync Detection" → "Refresh procedure (when user accepts)". Update `last_consolidation` to now. Then proceed to the numbered LOAD steps.
+   - If **no**: record a `## Known staleness` section in the upcoming session log listing the detected changes verbatim. Then proceed.
+5. If both commands return empty: memory is up-to-date, proceed to the numbered LOAD steps.
+
+See `references/memory-system.md` → "Desync Detection" for the full rationale and refresh procedure.
+
 1. Read `.forge/index.md`.
 2. From the user's task, match keywords against `architecture/modules.md` (primary), `knowledge/pitfalls.md` (bug keywords), and `bugs/` entries (known issues).
 3. Read only the relevant memory files.
@@ -132,7 +146,8 @@ Read `references/memory-system.md`. The cycle does not end without saving.
 3. Update `.forge/knowledge/dependencies.md` if dependencies changed.
 4. Update `.forge/qa/index.md` if the QA strategy evolved.
 5. Append to `.forge/sessions/<date>-<topic>.md`.
-6. Regenerate `.forge/index.md` from the current content.
+6. Update `last_consolidation` in `.forge/config.md` frontmatter to the current ISO 8601 timestamp — this is what the next cycle's LOAD desync probe uses as the cutoff.
+7. Regenerate `.forge/index.md` from the current content.
 
 Use templates from `skills/forge/templates/` when creating new memory files.
 

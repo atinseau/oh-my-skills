@@ -59,6 +59,34 @@ If the user's task references a directory that is NOT in `modules.md` at all (ev
 
 Enrichment reads are bounded: at most 5 files per module on first enrichment. The same 5-file cap applies to re-enrichment (when a module grows and its entry needs an update). If more is needed to understand the module, that is a signal the module is too large and may warrant a split (architecture-guard rule #1).
 
+## Desync Detection
+
+`.forge/` assumes every code change passes through a forge cycle. Reality breaks this assumption: `git pull`, IDE renames, out-of-band `npm i`, collaborators' merged PRs. The memory drifts silently. Desync detection catches this before it corrupts keyword matches and bug lookups.
+
+### Trigger
+
+Every LOAD runs the probe. See `SKILL.md` Step 1 for the exact commands.
+
+### Refresh procedure (when user accepts)
+
+Bounded. Do NOT rescan the codebase.
+
+1. **Dependencies:** re-parse the current manifest(s) found at bootstrap. Rewrite `knowledge/dependencies.md` entirely — dependencies are cumulative *by content*, not by append-only history (unlike sessions).
+2. **New modules:** list immediate subdirectories of the bootstrap root. For each that is absent from `modules.md`, add a seeded entry (`name` + `path` + `seeded: true`).
+3. **Removed modules:** for each entry in `modules.md` whose `path` no longer exists on disk, change its header annotation to `status: removed` (keep the entry — it preserves keyword history for past bugs/features that referenced it).
+4. **Do NOT re-enrich** existing non-seeded entries. Re-enrichment is a distinct operation, triggered only when a module is touched and its keywords look stale — out of scope for a refresh.
+5. Update `last_consolidation` in `config.md` frontmatter.
+
+### Refresh procedure (when user declines)
+
+1. Record the detected changes verbatim in the upcoming session log under a `## Known staleness` section. This makes the debt visible in future LOADs that read the session log.
+2. Proceed with LOAD. The agent operates with known-stale memory; keyword matches may miss newer code. The session log note is the contract that says the user accepted this tradeoff.
+
+### What desync is NOT
+
+- Not a replacement for MEMORIZE. MEMORIZE is the normal path: every completed cycle writes its changes into memory before exit. Desync only catches what MEMORIZE can't see because it happened outside a cycle.
+- Not automatic. The user always decides whether to refresh. Silent auto-refresh would risk clobbering intentional manual annotations.
+
 ## MEMORIZE Phase
 
 Mandatory at the end of every successful cycle. The cycle does not end without saving.
