@@ -124,9 +124,9 @@ Frontmatter:
 ```yaml
 ---
 profiles: [<matched profile names, or empty array>]
-build_cmd: <resolved command or "">
-test_cmd: <resolved command or "">
-lint_cmd: <resolved command or "">
+build_cmd: <resolved command — must be present>
+test_cmd: <resolved command or empty string>   # Empty is valid: project has no test suite yet. See SKILL.md Step 4 Case B.
+lint_cmd: <resolved command or empty string>
 detected_at: <ISO 8601 date>
 ---
 ```
@@ -165,6 +165,8 @@ detected_at: 2026-04-18T00:00:00Z
 - Both profiles detected. Only `nextjs` declares `commands`; `typescript` contributes rules only.
 - `lint_cmd` placeholder `<extensions>` resolved to `.ts,.tsx` from `tsconfig.json` include patterns.
 ```
+
+**When inferring commands in generic mode (0 profile matches)** and no test or lint command can be inferred from scripts, Makefiles, or manifests, do not guess. Leave the field empty and record under `## Decisions` that no test/lint infrastructure was detected. Step 4 handles an empty `test_cmd` cleanly — see SKILL.md Step 4 Case B.
 
 ### `.forge/architecture/modules.md`
 

@@ -64,7 +64,9 @@ For large projects, bump the Bash tool timeout to 300000 (5 min).
 
 ## Step 4 — TEST
 
-Execute the `test_cmd` from `.forge/config.md` frontmatter:
+Read the `test_cmd` from `.forge/config.md` frontmatter.
+
+### Case A — `test_cmd` is non-empty
 
 ```bash
 <test_cmd> 2>&1
@@ -72,6 +74,22 @@ Execute the `test_cmd` from `.forge/config.md` frontmatter:
 
 - **All pass** → Step 5.
 - **Failures** → back to Step 2 with: which test failed, the assertion message, and the relevant code.
+
+### Case B — `test_cmd` is empty (or absent)
+
+The project has no test suite configured. This is a valid project state, not a failure.
+
+- Proceed to Step 5.
+- JUDGE (Step 6) will treat the Tests criterion as `N/A` for this cycle.
+- If `.forge/knowledge/pitfalls.md` does NOT already contain a `no-test-suite` pitfall, add one at MEMORIZE explaining that TDD discipline cannot fully apply until a test framework is in place. Do NOT propose installing a framework autonomously — record the observation and continue.
+
+### Case C — `test_cmd` runs but reports "no tests found" with exit code 0
+
+Some runners (`jest --passWithNoTests`, `cargo test` on a crate with no tests) exit 0. Step 4 proceeds normally — this is equivalent to Case A "All pass".
+
+### Case D — `test_cmd` runs but reports "no tests found" with exit code != 0
+
+Distinguish this from a real failure by the run's stderr/stdout. If the output matches patterns like `no tests found`, `no test target`, or `test suite is empty` AND no assertion failure is present, treat as Case B (empty test suite). Otherwise treat as Case A failures.
 
 ## Step 5 — QA
 
@@ -95,13 +113,14 @@ Evaluate three criteria:
 | Criterion | Source | Pass |
 |---|---|---|
 | Build | Step 3 output | 0 errors |
-| Tests | Step 4 output | 100% pass |
+| Tests | Step 4 output | 100% pass, OR `N/A` when the project has no test suite (Step 4 Case B / C with no failures) |
 | QA | `.forge/qa/index.md` criterion per flow, **no unresolved `TODO (next cycle)` markers from a prior cycle** | objective pass |
 
 - **All pass** → Step 7.
 - **Any fail** → back to Step 2 with full context (which criterion, what error, relevant artefacts).
 - **5th failure** → stop. Document the blocker in `.forge/bugs/BUG-<NNN>.md` and inform the user.
 - If `qa/index.md` is marked `strategy: minimum-viable` from the *prior* cycle and still has `TODO (next cycle)` markers, that is a QA failure — return to Step 5 to complete the strategy before continuing the current task.
+- When Tests is `N/A`, JUDGE still requires Build and QA to pass. A cycle with `N/A` tests is valid; it is not a degraded pass.
 
 ## Step 7 — MEMORIZE (mandatory)
 

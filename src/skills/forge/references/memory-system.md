@@ -81,6 +81,7 @@ When creating new memory files, copy the corresponding template from `skills/for
 5. **`knowledge/pitfalls.md` and `knowledge/dependencies.md` are cumulative** — new entries are appended, old entries are never removed.
 6. **No duplication** — pitfalls live once in `knowledge/pitfalls.md`, referenced by links from modules and bugs.
 7. **QA artefacts do NOT live in the memory tree** — they live in `.forge/qa/`.
+8. **Infrastructure pitfalls are recorded once** — e.g. `no-test-suite` is added to `knowledge/pitfalls.md` the first time Step 4 hits Case B, then never duplicated. Subsequent cycles with no tests reference the existing pitfall rather than adding a new entry.
 
 ## Templates
 
