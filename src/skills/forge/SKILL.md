@@ -1,10 +1,22 @@
 ---
 name: forge
-description: Virtuous development cycle for any project. Language-agnostic core with composable profiles, deep memory, and self-built QA strategy. Use on any development task.
+description: Multi-cycle development framework for work spanning multiple sessions. Provides persistent memory (`.forge/`), language-aware profiles, architecture guard, and self-built QA. Best for features, bugfixes, and refactors that benefit from continuity across days; overkill for one-shot scripts, single-file edits, or throwaway repos.
 by: oh-my-skills
 ---
 
 # Forge
+
+## What forge is for
+
+Forge's value is **continuity across sessions**. Between your tasks, your lunch breaks, your weekends, `.forge/` preserves the agent's context so the next Claude session picks up where this one left off — without re-scanning the codebase.
+
+Best fit: features, bugfixes, or refactors spanning hours to days. Architecture guard and QA discipline keep quality high as the work stretches.
+
+Overkill for: one-shot scripts, single-file edits, throwaway repos. On day 1 of a project, forge costs more than it saves. Break-even hits around day 3-4 of active work; from then on, every cycle amortises the memory investment across faster LOADs and fewer rediscovered pitfalls.
+
+**If the current task is a one-liner or the project will exist for less than an afternoon, do NOT invoke forge.** Use the default Claude Code flow instead.
+
+## The cycle
 
 Virtuous development cycle: **LOAD → ACT → BUILD → TEST → QA → JUDGE → MEMORIZE**.
 
