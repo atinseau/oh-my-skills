@@ -1,6 +1,7 @@
 ---
 date: <YYYY-MM-DD>
 topic: <short-slug>
+author: <git user.email>
 iterations: <N>
 result: pass
 ---

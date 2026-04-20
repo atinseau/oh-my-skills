@@ -18,7 +18,7 @@
 ├── bugs/
 │   └── BUG-<NNN>.md                # One file per resolved bug
 ├── sessions/
-│   └── <date>-<topic>.md            # One session log per session
+│   └── <date>-<topic>-<author-slug>.md   # One session log per session per author
 └── qa/                              # Opaque — managed by agent (see QA is separate)
 ```
 
@@ -95,7 +95,7 @@ Mandatory at the end of every successful cycle. The cycle does not end without s
 2. Create or update `features/<name>.md` for feature work, or `bugs/BUG-<NNN>.md` for bug fixes.
 3. Update `qa/index.md` if the QA strategy evolved.
 4. Update `knowledge/dependencies.md` if dependencies changed.
-5. Append to `sessions/<date>-<topic>.md` — one session log per day per topic. If the file exists for today, append.
+5. Append to `sessions/<date>-<topic>-<author-slug>.md` — one session log per session per author. Derive `author-slug` from `git config user.email`: take the part before `@`, lowercase, replace non-alphanumerics with `-`, truncate to 20 chars. Fall back to `unknown` if git identity is unavailable.
 6. Regenerate `.forge/index.md` after every write.
 
 When creating new memory files, copy the corresponding template from `skills/forge/templates/` to ensure format consistency.
@@ -103,9 +103,9 @@ When creating new memory files, copy the corresponding template from `skills/for
 ## File Format Rules
 
 1. **One file = one subject** — one bug, one feature, one session per file. `architecture/modules.md` is the single exception: one file with many module blocks, where each module is a `## <name>` section.
-2. **Every per-entity file has `keywords:` in frontmatter** — applies to `bugs/BUG-<NNN>.md`, `features/<name>.md`, `sessions/<date>-<topic>.md`. In `architecture/modules.md`, each enriched module block lists `keywords:` as a body line inside its `## <name>` section; seeded blocks omit keywords until enrichment. Either form is the contract that makes `index.md` useful.
+2. **Every per-entity file has `keywords:` in frontmatter** — applies to `bugs/BUG-<NNN>.md`, `features/<name>.md`, `sessions/<date>-<topic>-<author-slug>.md`. In `architecture/modules.md`, each enriched module block lists `keywords:` as a body line inside its `## <name>` section; seeded blocks omit keywords until enrichment. Either form is the contract that makes `index.md` useful.
 3. **`index.md` is derived, never hand-edited** — regenerated each MEMORIZE phase.
-4. **Sessions are append-only** — one file per session, never overwritten mid-session.
+4. **Sessions are append-only and per-author** — one file per session per author. Filename pattern: `<date>-<topic>-<author-slug>.md`. `author-slug` is derived from `git config user.email` — take the part before `@`, lowercase it, replace any non-alphanumeric character with `-`, truncate to 20 characters. If no git identity is configured, use `unknown`. This keeps concurrent sessions on the same day from colliding in git.
 5. **`knowledge/pitfalls.md` and `knowledge/dependencies.md` are cumulative** — new entries are appended, old entries are never removed.
 6. **No duplication** — pitfalls live once in `knowledge/pitfalls.md`, referenced by links from modules and bugs.
 7. **QA artefacts do NOT live in the memory tree** — they live in `.forge/qa/`.
@@ -210,3 +210,31 @@ Refer to `references/qa-runner.md` for QA discipline and the agent's responsibil
 - **Conflicts**: If memory contradicts current code, code wins. Update the memory.
 - **No duplicates**: Before creating a new entry, check if one exists.
 - **Git**: `.forge/` is committed to git, including `.forge/qa/index.md` and `.forge/qa/scripts/` (scripts must be runnable in CI — see `references/qa-runner.md`). Gitignore only truly generated outputs (e.g. transient `current.png`, `diff-*.png`, on-the-fly fixtures); that policy belongs in the project's own `.gitignore`.
+
+## Merge Conflicts
+
+`.forge/` is committed to git, so concurrent work on a branch can produce merge conflicts. Resolution policy by file type:
+
+### `index.md` — discard and regenerate
+
+`index.md` is derived. On conflict, discard both sides and regenerate from the rest of `.forge/` by running the MEMORIZE index-regeneration step manually. The correct state is whatever the current `.forge/` content implies.
+
+### `architecture/modules.md` — merge per block
+
+Each `## <name>` block is independent. Resolve conflicting blocks block-by-block: keep the more-recently-enriched version (the one with fewer `seeded: true` markers and richer `keywords`). After resolving blocks, regenerate `index.md`.
+
+### `knowledge/pitfalls.md` and `knowledge/dependencies.md` — union
+
+These are cumulative. On conflict, take the union of entries from both sides. Deduplicate by entry name or title.
+
+### `sessions/<date>-<topic>-<author-slug>.md` — should not conflict
+
+Per-author naming eliminates this class of conflict by construction. If a conflict does occur (e.g. same author on two machines), fall back to append-both: keep both branches' content in chronological order within the file.
+
+### `bugs/BUG-<NNN>.md` and `features/<name>.md` — conflict = genuine divergence
+
+These reflect a single subject. If two agents edit the same bug/feature file concurrently, the content is genuinely divergent — resolve by hand, favouring the side with the more accurate "Verification" / "Design decisions" section.
+
+### `config.md` — rare; inspect `last_consolidation`
+
+If both sides changed `last_consolidation`, take the later timestamp. If profile commands diverge, resolve in favour of the side that documented the reason in `## Decisions`.

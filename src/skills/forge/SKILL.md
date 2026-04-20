@@ -145,7 +145,7 @@ Read `references/memory-system.md`. The cycle does not end without saving.
 2. Create or update `.forge/features/<name>.md` or `.forge/bugs/BUG-<NNN>.md`.
 3. Update `.forge/knowledge/dependencies.md` if dependencies changed.
 4. Update `.forge/qa/index.md` if the QA strategy evolved.
-5. Append to `.forge/sessions/<date>-<topic>.md`.
+5. Append to `.forge/sessions/<date>-<topic>-<author-slug>.md` — one session log per session per author. Derive `author-slug` from `git config user.email`: take the part before `@`, lowercase, replace non-alphanumerics with `-`, truncate to 20 chars. Fall back to `unknown` if git identity is unavailable.
 6. Update `last_consolidation` in `.forge/config.md` frontmatter to the current ISO 8601 timestamp — this is what the next cycle's LOAD desync probe uses as the cutoff.
 7. Regenerate `.forge/index.md` from the current content.
 
