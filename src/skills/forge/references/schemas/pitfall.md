@@ -30,4 +30,4 @@ date: 2026-04-20
 
 ## Save template
 
-See `skills/forge/templates/pitfall.md` for the ready-to-fill blank.
+No template — pitfalls are written inline as entries in `knowledge/pitfalls.md`, separated by `---`. Use the frontmatter + body structure above.

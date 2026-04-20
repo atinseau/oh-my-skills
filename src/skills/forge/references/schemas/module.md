@@ -45,4 +45,4 @@ Handles authentication via custom JWT.
 
 ## Save template
 
-See `skills/forge/templates/module.md` for the ready-to-fill blank.
+No template — modules are seeded inline (`seeded: true` stub) and enriched in place via `recall.md` → "Lazy module enrichment". Write them directly using the stub/enriched formats above.

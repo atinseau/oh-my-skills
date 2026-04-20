@@ -37,4 +37,4 @@ Monorepo: web app at `apps/web`, shared schema at `packages/schema`.
 
 ## Save template
 
-See `skills/forge/templates/context.md` for the ready-to-fill blank.
+No template — `context.md` is unique per project (one file, not a list). Write it inline using the frontmatter + body structure above.

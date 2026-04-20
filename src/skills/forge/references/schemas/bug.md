@@ -33,8 +33,11 @@ Login token not refreshed on expiry — user silently logged out.
 ## Root cause
 `middleware.ts` checked `exp` but never called the refresh endpoint.
 
-## Fix / Verification
-Added refresh call in `jwt.ts`; `bun test src/auth/` passes.
+## Fix
+Added refresh call in `jwt.ts` before rejecting expired tokens.
+
+## Verification
+`bun test src/auth/` passes; manual check on staging shows session persists across the `exp` boundary.
 
 ## Lesson
 Refresh before rejecting; don't assume the client handles it.
