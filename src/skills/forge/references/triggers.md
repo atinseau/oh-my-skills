@@ -13,6 +13,6 @@ Per-trigger details live in `triggers/<name>.md`. The dispatch matrix is in `SKI
 ## Shared references used by triggers
 
 - `<author-slug>` derivation — see `memory-structure.md` → "Session filename rule" (take part before `@` in `git config user.email`, lowercase, non-alphanumerics → `-`, truncate 20 chars, fallback `unknown`).
-- Schemas — see `schemas/<entity>.md` for frontmatter + body details of each entity a trigger may write.
+- Entity files — see `entities/<name>.md` for schema + example + blank of each entity a trigger may write.
 - Save discipline (dedup, compact rules, when NOT to save) — see `save.md`.
 - Recall modes (proactive / pre-flight / reactive) — see `recall.md`.

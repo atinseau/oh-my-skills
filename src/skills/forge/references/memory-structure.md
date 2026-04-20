@@ -4,25 +4,25 @@
 keywords; `index.md` is the table of contents and always the entry point. Files are deliberately
 small so recall can be selective — the agent loads only what matches the current task.
 
-For per-entity schemas (context, module, bug, pitfall, feature, decision, pattern, session),
-see `schemas/<entity>.md`.
+For per-entity schemas + blanks (context, module, bug, pitfall, feature, decision, pattern, session),
+see `skills/forge/entities/<entity>.md`.
 
 ## Directory Layout
 
 ```
 .forge/
-├── index.md                          # Table of contents (max 100 lines, derived) — see schemas/index below
-├── context.md                        # Project summary — see schemas/context.md
+├── index.md                          # Table of contents (max 100 lines, derived) — see entities/index below
+├── context.md                        # Project summary — see entities/context.md
 ├── modules/
-│   └── <name>.md                     # One file per module — see schemas/module.md
+│   └── <name>.md                     # One file per module — see entities/module.md
 ├── knowledge/
-│   ├── patterns.md                   # Reusable patterns (cumulative) — see schemas/pattern.md
-│   ├── pitfalls.md                   # Traps + workarounds (cumulative) — see schemas/pitfall.md
-│   ├── decisions.md                  # Architectural decisions (cumulative) — see schemas/decision.md
+│   ├── patterns.md                   # Reusable patterns (cumulative) — see entities/pattern.md
+│   ├── pitfalls.md                   # Traps + workarounds (cumulative) — see entities/pitfall.md
+│   ├── decisions.md                  # Architectural decisions (cumulative) — see entities/decision.md
 │   └── dependencies.md               # Extracted from manifests (rewritten on refresh)
-├── features/<name>.md                # One file per completed feature — see schemas/feature.md
-├── bugs/BUG-<NNN>.md                 # One file per resolved bug — see schemas/bug.md
-└── sessions/<date>-<topic>-<author-slug>.md   # Only when memorable — see schemas/session.md
+├── features/<name>.md                # One file per completed feature — see entities/feature.md
+├── bugs/BUG-<NNN>.md                 # One file per resolved bug — see entities/bug.md
+└── sessions/<date>-<topic>-<author-slug>.md   # Only when memorable — see entities/session.md
 ```
 
 ## index.md

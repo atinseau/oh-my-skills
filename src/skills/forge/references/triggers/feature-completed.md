@@ -6,7 +6,7 @@
 
 **Action:**
 1. Pick a slug for the feature (kebab-case, 2-4 words).
-2. Write `.forge/features/<slug>.md` using `skills/forge/templates/feature.md`. Target 15-30 lines. Include `paths_involved: [<touched file paths>]` in frontmatter.
+2. Write `.forge/features/<slug>.md` using `skills/forge/entities/feature.md` (schema + blank). Target 15-30 lines. Include `paths_involved: [<touched file paths>]` in frontmatter.
 3. Scan the work for secondary memorables:
    - Reusable pattern → Trigger 3.
    - Architectural decision with non-obvious rationale → Trigger 5.
