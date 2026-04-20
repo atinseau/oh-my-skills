@@ -1,4 +1,4 @@
-# Module schema
+# Module
 
 Used by: `.forge/modules/<name>.md` (one file per module, built lazily on first reference).
 
@@ -14,7 +14,7 @@ Used by: `.forge/modules/<name>.md` (one file per module, built lazily on first 
 
 Absent when `seeded: true`. When enriched: `## Role` (one sentence), `## Key files` (2-3 bullets), `## Dependencies` (optional).
 
-## Examples
+## Example (filled)
 
 Seeded stub:
 
@@ -43,6 +43,6 @@ Handles authentication via custom JWT.
 - `src/auth/middleware.ts` (route guard)
 ```
 
-## Save template
+## How to write
 
 No template — modules are seeded inline (`seeded: true` stub) and enriched in place via `recall.md` → "Lazy module enrichment". Write them directly using the stub/enriched formats above.

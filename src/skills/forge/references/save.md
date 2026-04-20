@@ -2,18 +2,18 @@
 
 How to write to `.forge/`. The goal is compact, deduped, keyword-indexed entries — not a diary. Forge is a knowledge base, not a log.
 
-## Pick the template and schema
+## Pick the entity file
 
-For each trigger, load **only** the matching template (copy-paste blank) + schema (field details). Do not load all 8 schemas.
+For each trigger, load **only** the matching entity file (`entities/<name>.md`) — it contains both the schema (field details) and the blank to copy.
 
-| Trigger | Template | Schema | Destination |
-|---|---|---|---|
-| Feature completed | `templates/feature.md` | `schemas/feature.md` | `features/<name>.md` |
-| Bug resolved | `templates/bug.md` | `schemas/bug.md` | `bugs/BUG-<NNN>.md` |
-| Pattern surfaced | `templates/pattern.md` | `schemas/pattern.md` | appended entry in `knowledge/patterns.md` |
-| Pitfall discovered | (inline — see `schemas/pitfall.md`) | `schemas/pitfall.md` | appended entry in `knowledge/pitfalls.md` |
-| Decision made | `templates/decision.md` | `schemas/decision.md` | appended entry in `knowledge/decisions.md` |
-| Memorable session | `templates/session.md` | `schemas/session.md` | `sessions/<date>-<topic>-<author-slug>.md` |
+| Trigger | Entity file | Destination |
+|---|---|---|
+| Feature completed | `entities/feature.md` | `.forge/features/<name>.md` |
+| Bug resolved | `entities/bug.md` | `.forge/bugs/BUG-<NNN>.md` |
+| Pattern surfaced | `entities/pattern.md` | appended entry in `.forge/knowledge/patterns.md` |
+| Pitfall discovered | `entities/pitfall.md` | appended entry in `.forge/knowledge/pitfalls.md` |
+| Decision made | `entities/decision.md` | appended entry in `.forge/knowledge/decisions.md` |
+| Memorable session | `entities/session.md` | `.forge/sessions/<date>-<topic>-<author-slug>.md` |
 
 When both a feature/bug file AND a session file would be written for the same work, **prefer the feature/bug file**. The session log is redundant — skip it. A session file is only written when the work is memorable but did not complete a specific feature or fix a specific bug.
 
@@ -45,9 +45,9 @@ Keywords drive recall. Weak keywords make entries invisible. Strong keywords are
 - Include the error code or exception name for bugs: `ERR_SOCKET_TIMEOUT`, `ZodError`.
 - 3 terms minimum — a single keyword is never enough to distinguish an entry.
 
-### Template shortcut: pitfall inline format
+### Pitfall inline format
 
-When no template exists for pitfalls, write the entry inline:
+Write pitfall entries inline:
 
 ```
 ---
@@ -122,5 +122,5 @@ Always, after any write to `.forge/`:
 - Filename pattern: `sessions/<date>-<topic>-<author-slug>.md`.
 - `<author-slug>` derivation: `git config user.email`, take the part before `@`, lowercase, replace non-alphanumerics with `-`, truncate to 20 chars. Fallback: `unknown`.
 - Session files are per-author — eliminates collisions when multiple devs work on the same branch the same day.
-- Content: use `templates/session.md`. Minimal: frontmatter + `## Learnings` + `## Follow-ups`. No `## What was asked`.
+- Content: use `entities/session.md` → "Blank" section. Minimal: frontmatter + `## Learnings` + `## Follow-ups`. No `## What was asked`.
 - Only write a session file if the session produced something memorable (trigger the save path). A no-op session produces nothing.

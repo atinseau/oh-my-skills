@@ -1,4 +1,4 @@
-# Session schema
+# Session
 
 Used by: `.forge/sessions/<date>-<topic>-<author-slug>.md`.
 Written **only** when the session produced a project-level learning — routine sessions don't produce a file.
@@ -23,7 +23,7 @@ For `<author-slug>` derivation, see `memory-structure.md` → "Session filename 
 - `## Follow-ups` — optional; tasks or questions deferred
 - `## Known staleness` — optional; added when a Trigger 6 refresh was declined
 
-## Example
+## Example (filled)
 
 ```markdown
 ---
@@ -42,6 +42,20 @@ keywords: [oauth2, login, google, session]
 - Implement refresh-token rotation before going to prod.
 ```
 
-## Save template
+## Blank (copy this to start)
 
-See `skills/forge/templates/session.md` for the ready-to-fill blank.
+```markdown
+---
+date: <YYYY-MM-DD>
+author: <git user.email>         # full email; filename uses derived slug (see memory-structure.md)
+topic: <short-slug>
+result: pass
+keywords: [<kw1>, <kw2>]
+---
+
+## Learnings
+- <Project-specific, concrete.>
+
+## Follow-ups
+- <If any.>
+```

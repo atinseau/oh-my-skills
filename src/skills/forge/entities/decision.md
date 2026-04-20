@@ -1,4 +1,4 @@
-# Decision schema
+# Decision
 
 Used by: `.forge/knowledge/decisions.md` (cumulative; entries separated by `---`).
 
@@ -16,7 +16,7 @@ Used by: `.forge/knowledge/decisions.md` (cumulative; entries separated by `---`
 - `## Chosen` — what was picked and one-line rationale
 - `## Consequences` — trade-offs or downstream effects to be aware of
 
-## Example
+## Example (filled)
 
 ```markdown
 ---
@@ -39,6 +39,25 @@ Custom JWT. Fewer dependencies; team already comfortable with manual token handl
 Must implement refresh rotation and revocation manually.
 ```
 
-## Save template
+## Blank (copy this to start)
 
-See `skills/forge/templates/decision.md` for the ready-to-fill blank.
+```markdown
+---
+name: <decision-slug>
+keywords: [<kw1>, <kw2>]
+created: <YYYY-MM-DD>
+---
+
+## Context
+<1-2 sentences: what problem triggered the decision.>
+
+## Options considered
+- <Option A> — <one-line pro/con>
+- <Option B> — <one-line pro/con>
+
+## Chosen
+<Which option + one-sentence rationale.>
+
+## Consequences
+<What this choice means going forward (constraints, trade-offs accepted).>
+```

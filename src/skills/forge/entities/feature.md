@@ -1,4 +1,4 @@
-# Feature schema
+# Feature
 
 Used by: `.forge/features/<name>.md` (one file per completed feature).
 
@@ -15,7 +15,7 @@ Used by: `.forge/features/<name>.md` (one file per completed feature).
 `## Goal` (one sentence) / `## Approach` (2-4 sentences) / `## Files` (bullets) /
 `## Learnings` (1-3 bullets) / `## Follow-ups` (optional)
 
-## Example
+## Example (filled)
 
 ```markdown
 ---
@@ -44,6 +44,29 @@ Token exchange in API route; session written via existing JWT helper.
 - Add refresh-token rotation (deferred).
 ```
 
-## Save template
+## Blank (copy this to start)
 
-See `skills/forge/templates/feature.md` for the ready-to-fill blank.
+```markdown
+---
+name: <feature-slug>
+status: done
+keywords: [<kw1>, <kw2>, <kw3>]
+created: <YYYY-MM-DD>
+---
+
+## Goal
+<One sentence: what this feature does for the user.>
+
+## Approach
+<2-4 bullets on the implementation shape. Non-obvious only.>
+
+## Files
+- `<path>` (role)
+- `<path>` (role)
+
+## Learnings (1-3 bullets)
+- <Project-specific insight worth remembering.>
+
+## Follow-ups
+- <Known deferred work.>
+```

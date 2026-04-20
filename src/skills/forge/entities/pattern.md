@@ -1,4 +1,4 @@
-# Pattern schema
+# Pattern
 
 Used by: `.forge/knowledge/patterns.md` (cumulative; entries separated by `---`).
 
@@ -14,7 +14,7 @@ Used by: `.forge/knowledge/patterns.md` (cumulative; entries separated by `---`)
 - `## Why here` — why it fits this project specifically
 - `## Where applied` — files or modules that use it
 
-## Example
+## Example (filled)
 
 ```markdown
 ---
@@ -35,6 +35,22 @@ API routes return structured JSON errors — throwing breaks that contract.
 - `src/lib/validators.ts`
 ```
 
-## Save template
+## Blank (copy this to start)
 
-See `skills/forge/templates/pattern.md` for the ready-to-fill blank.
+```markdown
+---
+name: <pattern-slug>
+keywords: [<kw1>, <kw2>, <kw3>]
+created: <YYYY-MM-DD>
+---
+
+## Pattern
+<One-liner or short code example showing the shape.>
+
+## Why here
+<1-2 sentences: what problem this solves in this project.>
+
+## Where applied
+- `<path>`
+- `<path>`
+```

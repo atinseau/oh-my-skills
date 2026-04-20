@@ -13,7 +13,7 @@ Project memory skill. Save / recall / warn based on the active trigger. Does NOT
 1. Identify which of the 7 triggers fires (see table below).
 2. Load `references/triggers/<name>.md` — ONLY the one that fires.
 3. Follow its detect + action blocks.
-4. For save actions → also read `references/save.md` and the matching `references/schemas/<entity>.md`.
+4. For save actions → also read `references/save.md` and the matching `entities/<entity>.md`.
 5. For recall actions → also read `references/recall.md`.
 6. Use `references/memory-structure.md` for `.forge/` layout, `index.md` format, session filename rule, security, and merge-conflict policy.
 
@@ -47,11 +47,10 @@ See `references/triggers.md` for the "Not invoked for" exclusion list.
 src/skills/forge/
 ├── SKILL.md                           # this file — dispatcher
 ├── references/
-│   ├── triggers.md                    # matrix + exclusion list
+│   ├── triggers.md                    # exclusion list + shared-refs note
 │   ├── triggers/<name>.md             # 7 per-trigger detail files (load only the one that fires)
-│   ├── save.md                        # write path: templates, compact rules, semantic dedup
+│   ├── save.md                        # write path: entity picker, compact rules, semantic dedup
 │   ├── recall.md                      # 3 recall modes (proactive / pre-flight / reactive) + lazy enrichment
-│   ├── memory-structure.md            # .forge/ layout + index format + session rule + security + merge
-│   └── schemas/<entity>.md            # per-entity schema + example (load only the one being saved)
-└── templates/<entity>.md              # copy-paste blanks
+│   └── memory-structure.md            # .forge/ layout + index format + session rule + security + merge
+└── entities/<name>.md                 # per-entity schema + example + blank (load only the one being saved)
 ```

@@ -1,4 +1,4 @@
-# Pitfall schema
+# Pitfall
 
 Used by: `.forge/knowledge/pitfalls.md` (cumulative; entries separated by `---`).
 
@@ -13,7 +13,7 @@ Used by: `.forge/knowledge/pitfalls.md` (cumulative; entries separated by `---`)
 
 One-sentence description of the trap, then a `**Workaround**:` line with the fix.
 
-## Example
+## Example (filled)
 
 ```markdown
 ---
@@ -28,6 +28,6 @@ date: 2026-04-20
 **Workaround**: set `export const runtime = 'nodejs'` at the top of any route that reads cookies.
 ```
 
-## Save template
+## How to write
 
 No template — pitfalls are written inline as entries in `knowledge/pitfalls.md`, separated by `---`. Use the frontmatter + body structure above.

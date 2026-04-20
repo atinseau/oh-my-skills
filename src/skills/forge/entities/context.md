@@ -1,4 +1,4 @@
-# Context schema
+# Context
 
 Used by: `.forge/context.md` (single file at root of memory).
 
@@ -15,7 +15,7 @@ Used by: `.forge/context.md` (single file at root of memory).
 
 3-8 sentences on stack specifics, structure, and conventions worth remembering. Not a full architecture document — a condensed briefing.
 
-## Example
+## Example (filled)
 
 ```markdown
 ---
@@ -35,6 +35,6 @@ Auth via custom JWT (no NextAuth). Postgres via Drizzle. Tailwind + shadcn for U
 Monorepo: web app at `apps/web`, shared schema at `packages/schema`.
 ```
 
-## Save template
+## How to write
 
 No template — `context.md` is unique per project (one file, not a list). Write it inline using the frontmatter + body structure above.
