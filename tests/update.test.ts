@@ -12,6 +12,10 @@ import {
 
 const CACHE_FILE = `${INSTALL}/.update-cache`;
 
+// A semver strictly greater than VERSION — used for "remote has new version" scenarios.
+// Derived from VERSION so it stays valid after release bumps.
+const NEW_VERSION = `${Number(VERSION.split(".")[0]) + 1}.0.0`;
+
 describe("oh-my-skills Update (real script)", () => {
 	let container: StartedTestContainer;
 	let id: string;
@@ -199,12 +203,12 @@ describe("oh-my-skills Update (real script)", () => {
 		// Push a new version to the remote repo — also update hi.sh to verify command updates
 		exec(
 			id,
-			"cd /tmp/remote-repo && echo bye > src/commands/bye.sh && git add . && git commit -m 'feat(commands): add bye alias' && printf '#!/bin/bash\\nalias hi=\"echo hi v2\"\\n' > src/commands/hi.sh && echo fix > CHANGELOG_FIX && git add . && git commit -m 'fix(update): improve release sync' && git tag v0.2.0",
+			`cd /tmp/remote-repo && echo bye > src/commands/bye.sh && git add . && git commit -m 'feat(commands): add bye alias' && printf '#!/bin/bash\\nalias hi="echo hi v2"\\n' > src/commands/hi.sh && echo fix > CHANGELOG_FIX && git add . && git commit -m 'fix(update): improve release sync' && git tag v${NEW_VERSION}`,
 		);
 
-		// Simulate what the background fetch would have written: a fresh cache with v0.2.0
+		// Simulate what the background fetch would have written: a fresh cache with the new version
 		const now = Math.floor(Date.now() / 1000);
-		exec(id, `echo "${now} 0.2.0" > ${CACHE_FILE}`);
+		exec(id, `echo "${now} ${NEW_VERSION}" > ${CACHE_FILE}`);
 
 		// Auto-check should now detect the update from cache (no network needed)
 		const r = exec(
@@ -243,7 +247,7 @@ describe("oh-my-skills Update (real script)", () => {
 	});
 
 	it("should have updated existing command after update", () => {
-		// hi.sh was modified in v0.2.0 — verify the installed copy reflects the new content
+		// hi.sh was modified in the new tag — verify the installed copy reflects the new content
 		const r = exec(id, `cat ${INSTALL}/commands/hi.sh`);
 		expect(r.output).toContain("hi v2");
 	});
@@ -258,7 +262,7 @@ describe("oh-my-skills Update (real script)", () => {
 	it("should respect OMS_UPDATE_CACHE_TTL override", () => {
 		// Write a cache with a timestamp 2 seconds ago and TTL of 1 second — should be stale
 		const staleTs = Math.floor(Date.now() / 1000) - 2;
-		exec(id, `echo "${staleTs} 0.2.0" > ${CACHE_FILE}`);
+		exec(id, `echo "${staleTs} ${NEW_VERSION}" > ${CACHE_FILE}`);
 
 		// With TTL=1, the cache is stale, so auto-check should spawn background fetch (silent)
 		const r = exec(
@@ -272,7 +276,7 @@ describe("oh-my-skills Update (real script)", () => {
 	it("should use cache when TTL is large enough", () => {
 		// Write a cache with a recent timestamp containing a different version
 		const now = Math.floor(Date.now() / 1000);
-		exec(id, `echo "${now} 9.9.9" > ${CACHE_FILE}`);
+		exec(id, `echo "${now} ${NEW_VERSION}" > ${CACHE_FILE}`);
 
 		// With default TTL, this fresh cache should trigger update prompt
 		const r = exec(
