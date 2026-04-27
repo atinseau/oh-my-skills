@@ -185,6 +185,13 @@ never-sleep() {
     # We ignore INT/TERM during each to close the race windows entirely — a
     # signal arriving inside is simply held until we restore the trap, at
     # which point the EXIT trap fires with consistent state.
+    #
+    # Outside the critical sections we install `trap 'exit 130' INT TERM`
+    # rather than restoring the default. Why: in zsh, an untrapped SIGINT
+    # terminates a `(...)` subshell WITHOUT firing its EXIT trap, so cleanup
+    # that restores SleepDisabled would be skipped on Ctrl+C — leaving the
+    # user's machine unable to sleep. Calling `exit` from a signal trap fires
+    # the EXIT trap reliably in both bash and zsh.
     (
         local watcher_pid=""
         local changed=0
@@ -192,19 +199,19 @@ never-sleep() {
 
         trap '' INT TERM
         if ! sudo pmset -a disablesleep 1; then
-            trap - INT TERM
+            trap 'exit 130' INT TERM
             echo "❌ Failed" >&2
             exit 1
         fi
         changed=1
-        trap - INT TERM
+        trap 'exit 130' INT TERM
 
         _ns_print_banner "$seconds"
 
         trap '' INT TERM
         _ns_clamshell_watcher "$poll_interval" &
         watcher_pid=$!
-        trap - INT TERM
+        trap 'exit 130' INT TERM
 
         if [[ -n "$seconds" ]]; then
             caffeinate -s -t "$seconds"
