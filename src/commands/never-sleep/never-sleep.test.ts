@@ -12,7 +12,7 @@ describe("never-sleep command", () => {
 			.start();
 		id = container.getId();
 
-		exec(id, "apk add --no-cache bash >/dev/null 2>&1");
+		exec(id, "apk add --no-cache bash zsh >/dev/null 2>&1");
 		exec(id, "mkdir -p /commands/never-sleep /fakebin");
 		copyToContainer(
 			id,
@@ -279,6 +279,64 @@ DRIVER`,
 		setCaffeinate("quick");
 	}, 20_000);
 
+	it("should restore on real Ctrl+C in zsh (SIGINT to process group)", () => {
+		// Faithful reproduction of the user's bug: zsh interactive shell,
+		// Ctrl+C delivers SIGINT to the entire foreground process group (the
+		// subshell + caffeinate + watcher all receive it). In zsh, an untrapped
+		// SIGINT terminates a `(...)` subshell WITHOUT firing its EXIT trap, so
+		// `_ns_cleanup` never runs and `pmset disablesleep 1` is left in place.
+		// The fix is to install an explicit `trap 'exit N' INT TERM` instead of
+		// resetting to default — `exit` triggers the EXIT trap reliably.
+		setCaffeinate("blocking");
+		exec(id, "rm -f /tmp/caffeinate.pid");
+
+		exec(
+			id,
+			`cat > /tmp/zsh-ctrlc-driver.sh <<'DRIVER'
+#!/bin/bash
+export PATH=/fakebin:$PATH
+: > /tmp/calls.log
+export PMSET_INITIAL_STATE=0
+
+# set -m makes the backgrounded shell its own process-group leader, so a
+# negative-PID kill targets only that group (and doesn't take the driver
+# itself down).
+set -m
+zsh -c '
+  source /commands/never-sleep/never-sleep.sh
+  never-sleep
+' >/tmp/nsleep.out 2>&1 &
+zshpid=$!
+
+for i in $(seq 1 50); do
+  [ -f /tmp/caffeinate.pid ] && break
+  sleep 0.05
+done
+[ ! -f /tmp/caffeinate.pid ] && { echo TIMEOUT; kill $zshpid 2>/dev/null; exit 1; }
+
+# Real Ctrl+C: SIGINT to the whole process group, not just one process.
+kill -INT -$zshpid
+wait $zshpid 2>/dev/null
+echo EXIT=$?
+DRIVER`,
+		);
+		exec(id, "chmod +x /tmp/zsh-ctrlc-driver.sh");
+
+		const result = exec(id, "/tmp/zsh-ctrlc-driver.sh 2>&1");
+		expect(result.output).not.toContain("TIMEOUT");
+		expect(result.output).toContain("EXIT=");
+
+		const calls = exec(id, "cat /tmp/calls.log");
+		// The full enable→caffeinate→restore sequence MUST be present. If the
+		// EXIT trap was skipped, the trailing `pmset -a disablesleep 0` won't
+		// be there and SleepDisabled stays at 1 in the user's real session.
+		expect(calls.output).toMatch(
+			/pmset -a disablesleep 1[\s\S]*caffeinate -s[\s\S]*pmset -a disablesleep 0/,
+		);
+
+		setCaffeinate("quick");
+	}, 20_000);
+
 	it("should pass caffeinate -t with parsed seconds for --duration 30s", () => {
 		const result = exec(
 			id,
@@ -536,14 +594,21 @@ DRIVER`,
 		// Lock the atomic-critical-section invariant: during the windows where
 		// pmset success → `changed=1` and watcher-start → `watcher_pid=$!`,
 		// signals must be ignored (`trap '' INT TERM`). Scan the script to
-		// verify both regions are bracketed by signal-blocking traps.
+		// verify both regions are bracketed by signal-blocking traps and that
+		// each block is closed by re-installing a handler that fires EXIT (we
+		// never restore default — see the zsh-subshell-EXIT-trap regression).
 		const script = exec(id, "cat /commands/never-sleep/never-sleep.sh");
 		const blockCount = (script.output.match(/trap '' INT TERM/g) ?? []).length;
-		const restoreCount = (script.output.match(/trap - INT TERM/g) ?? []).length;
-		// Two critical sections => two blocks; each block has a restore (and
-		// the pmset block has an extra restore in its failure branch).
+		const restoreCount = (
+			script.output.match(/trap 'exit \d+' INT TERM/g) ?? []
+		).length;
+		// Two critical sections => two blocks; each block re-installs an
+		// exit-on-signal handler (and the pmset block has an extra one in its
+		// failure branch).
 		expect(blockCount).toBe(2);
 		expect(restoreCount).toBeGreaterThanOrEqual(2);
+		// The default-restore form is unsafe in zsh and must NOT come back.
+		expect(script.output).not.toMatch(/trap - INT TERM/);
 	});
 
 	it("should only expose never-sleep + _ns_* helpers (namespace discipline)", () => {
