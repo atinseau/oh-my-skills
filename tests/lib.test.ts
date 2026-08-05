@@ -387,6 +387,40 @@ describe("lib.sh unit tests", () => {
 		});
 	});
 
+	// ─── registry_read_paths() ────────────────────────────────────────────────
+	// Regression coverage for the same bug class as registry_read_enabled_hooks
+	// below: an empty skills list is the normal state of a fresh install, and
+	// must never make registry_read_paths propagate a non-zero exit status to
+	// a `paths=$(registry_read_paths)` caller running under `set -euo
+	// pipefail` (install.sh/uninstall.sh, via clean_installed_skills).
+
+	describe("registry_read_paths()", () => {
+		it("does not fail on an empty skills list with jq (set -e safe)", () => {
+			lib(id, `init_registry`); // skills.claude/copilot start out as []
+			const r = exec(
+				id,
+				`bash -c 'source /scripts/lib.sh 2>/dev/null; set -euo pipefail; paths=$(registry_read_paths); echo "ok:[$paths]"'`,
+			);
+			expect(r.exitCode).toBe(0);
+			expect(r.output).toBe("ok:[]");
+		});
+
+		it("does not fail on an empty skills list without jq (set -e safe)", () => {
+			lib(id, `init_registry`);
+			exec(id, `mv /usr/bin/jq /usr/bin/jq.bak`);
+			try {
+				const r = exec(
+					id,
+					`bash -c 'source /scripts/lib.sh 2>/dev/null; set -euo pipefail; paths=$(registry_read_paths); echo "ok:[$paths]"'`,
+				);
+				expect(r.exitCode).toBe(0);
+				expect(r.output).toBe("ok:[]");
+			} finally {
+				exec(id, `mv /usr/bin/jq.bak /usr/bin/jq`);
+			}
+		});
+	});
+
 	// ─── hooks registry ───────────────────────────────────────────────────────
 
 	describe("hooks registry", () => {
@@ -447,6 +481,39 @@ describe("lib.sh unit tests", () => {
 				const r = exec(id, `cat ${INSTALL}/registry.json`);
 				const registry = JSON.parse(r.output);
 				expect(registry.hooks.enabled).toEqual(["handoff"]);
+			} finally {
+				exec(id, `mv /usr/bin/jq.bak /usr/bin/jq`);
+			}
+		});
+
+		it("registry_read_enabled_hooks does not fail on an empty list with jq (set -e safe)", () => {
+			lib(id, `init_registry`); // hooks.enabled starts out as []
+			// Reproduces the exact disable_all_hooks pattern
+			// (`enabled=$(registry_read_enabled_hooks)`) under `set -euo
+			// pipefail`, as run by uninstall.sh. A failing command
+			// substitution here would abort the whole `bash -c` before the
+			// echo below ever runs.
+			const r = exec(
+				id,
+				`bash -c 'source /scripts/lib.sh 2>/dev/null; set -euo pipefail; enabled=$(registry_read_enabled_hooks); echo "ok:[$enabled]"'`,
+			);
+			expect(r.exitCode).toBe(0);
+			expect(r.output).toBe("ok:[]");
+		});
+
+		it("registry_read_enabled_hooks does not fail on an empty list without jq (set -e safe)", () => {
+			lib(id, `init_registry`);
+			// Hide jq to force the non-jq sed/tr/grep fallback — this is the
+			// exact path where `grep -v '^$'` used to exit 1 on the normal
+			// empty-array case, silently killing uninstall.sh under set -e.
+			exec(id, `mv /usr/bin/jq /usr/bin/jq.bak`);
+			try {
+				const r = exec(
+					id,
+					`bash -c 'source /scripts/lib.sh 2>/dev/null; set -euo pipefail; enabled=$(registry_read_enabled_hooks); echo "ok:[$enabled]"'`,
+				);
+				expect(r.exitCode).toBe(0);
+				expect(r.output).toBe("ok:[]");
 			} finally {
 				exec(id, `mv /usr/bin/jq.bak /usr/bin/jq`);
 			}
@@ -624,6 +691,92 @@ describe("lib.sh unit tests", () => {
 				g.hooks.map((h: any) => h.command),
 			);
 			expect(commands).toEqual(["/my/own/script.sh"]);
+		});
+
+		it("settings_merge_hook handles a matcher-group with no hooks key at all", () => {
+			// A matcher-group object with no `.hooks` key is a valid-but-unusual
+			// settings.json shape. Without a null guard, jq's `.hooks |= map(...)`
+			// tries to iterate over null and errors out (exit 5, "Cannot iterate
+			// over null"), breaking `oms hooks enable` for any user whose real
+			// settings.json has such a group.
+			exec(
+				id,
+				`echo '{"hooks":{"UserPromptSubmit":[{"matcher":"*"}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			const r = lib(
+				id,
+				`settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`,
+			);
+			expect(r.exitCode).toBe(0);
+			const settings = JSON.parse(
+				exec(id, `cat ${HOME}/.claude/settings.json`).output,
+			);
+			const commands = settings.hooks.UserPromptSubmit.flatMap((g: any) =>
+				(g.hooks ?? []).map((h: any) => h.command),
+			);
+			expect(commands).toContain("/opt/hook.sh");
+		});
+
+		it("settings_merge_hook handles a matcher-group with an empty hooks array", () => {
+			exec(
+				id,
+				`echo '{"hooks":{"UserPromptSubmit":[{"matcher":"*","hooks":[]}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			const r = lib(
+				id,
+				`settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`,
+			);
+			expect(r.exitCode).toBe(0);
+			const settings = JSON.parse(
+				exec(id, `cat ${HOME}/.claude/settings.json`).output,
+			);
+			const commands = settings.hooks.UserPromptSubmit.flatMap((g: any) =>
+				g.hooks.map((h: any) => h.command),
+			);
+			expect(commands).toContain("/opt/hook.sh");
+		});
+
+		it("settings_remove_hook handles a matcher-group with no hooks key at all", () => {
+			// Consequence on the uninstall path if this errors: hook_disable
+			// fails, disable_all_hooks swallows it with `|| true`, uninstall
+			// proceeds to delete ~/.oh-my-skills anyway, and the user is left
+			// with a dangling command entry in their real global settings.json
+			// forever.
+			exec(
+				id,
+				`echo '{"hooks":{"UserPromptSubmit":[{"matcher":"*"},{"matcher":"*","hooks":[{"type":"command","command":"/opt/hook.sh","timeout":10}]}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			const r = lib(
+				id,
+				`settings_remove_hook "UserPromptSubmit" "/opt/hook.sh"`,
+			);
+			expect(r.exitCode).toBe(0);
+			const settings = JSON.parse(
+				exec(id, `cat ${HOME}/.claude/settings.json`).output,
+			);
+			const commands = (settings.hooks.UserPromptSubmit ?? []).flatMap(
+				(g: any) => (g.hooks ?? []).map((h: any) => h.command),
+			);
+			expect(commands).not.toContain("/opt/hook.sh");
+		});
+
+		it("settings_remove_hook handles a matcher-group with an empty hooks array", () => {
+			exec(
+				id,
+				`echo '{"hooks":{"UserPromptSubmit":[{"matcher":"*","hooks":[]},{"matcher":"*","hooks":[{"type":"command","command":"/opt/hook.sh","timeout":10}]}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			const r = lib(
+				id,
+				`settings_remove_hook "UserPromptSubmit" "/opt/hook.sh"`,
+			);
+			expect(r.exitCode).toBe(0);
+			const settings = JSON.parse(
+				exec(id, `cat ${HOME}/.claude/settings.json`).output,
+			);
+			const commands = (settings.hooks.UserPromptSubmit ?? []).flatMap(
+				(g: any) => (g.hooks ?? []).map((h: any) => h.command),
+			);
+			expect(commands).not.toContain("/opt/hook.sh");
 		});
 
 		it("settings_merge_hook's idempotent re-merge only strips the matching hook from a co-located group, not the whole group", () => {

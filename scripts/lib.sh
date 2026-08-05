@@ -183,10 +183,15 @@ registry_read_paths() {
     if [[ ! -f "$REGISTRY_FILE" ]]; then
         return 0
     fi
+    # This function's whole contract is "print paths or nothing" — an empty
+    # skills list is the normal state of a fresh install, not an error, so
+    # neither branch may propagate a "no results" exit status to the caller
+    # (both branches run under `set -euo pipefail` in install.sh/uninstall.sh,
+    # where a failing command substitution aborts the entire script).
     if command -v jq &> /dev/null; then
-        jq -r '.skills.claude[]?, .skills.copilot[]?' "$REGISTRY_FILE" 2>/dev/null
+        jq -r '.skills.claude[]?, .skills.copilot[]?' "$REGISTRY_FILE" 2>/dev/null || true
     else
-        grep -oE '"(/[^"]+)"' "$REGISTRY_FILE" 2>/dev/null | tr -d '"'
+        grep -oE '"(/[^"]+)"' "$REGISTRY_FILE" 2>/dev/null | tr -d '"' || true
     fi
 }
 
@@ -239,11 +244,17 @@ registry_read_enabled_hooks() {
     if [[ ! -f "$REGISTRY_FILE" ]]; then
         return 0
     fi
+    # Same "print names or nothing, never fail" contract as registry_read_paths
+    # above — an empty `hooks.enabled` array is what every fresh install
+    # writes, and the non-jq fallback's trailing `grep -v '^$'` exits 1 on
+    # that normal empty case (grep's "no matches" exit code), which would
+    # otherwise abort callers running under `set -euo pipefail`
+    # (disable_all_hooks is called directly from uninstall.sh).
     if command -v jq &> /dev/null; then
-        jq -r '.hooks.enabled[]?' "$REGISTRY_FILE" 2>/dev/null
+        jq -r '.hooks.enabled[]?' "$REGISTRY_FILE" 2>/dev/null || true
     else
         sed -n 's/.*"enabled"[[:space:]]*:[[:space:]]*\[\(.*\)\].*/\1/p' "$REGISTRY_FILE" 2>/dev/null \
-            | tr ',' '\n' | tr -d '" ' | grep -v '^$'
+            | tr ',' '\n' | tr -d '" ' | grep -v '^$' || true
     fi
 }
 
@@ -256,13 +267,21 @@ registry_add_enabled_hook() {
     fi
     local name="$1"
     local tmp
-    tmp=$(mktemp)
+    # Allocate the tmp file next to $REGISTRY_FILE (not in $TMPDIR) so the mv
+    # below is guaranteed to be a same-filesystem rename — an atomic swap
+    # rather than a cross-filesystem copy-then-unlink that a kill mid-copy
+    # could leave truncated.
+    tmp=$(mktemp "${REGISTRY_FILE}.XXXXXX")
     if ! jq -c --arg n "$name" '.hooks.enabled = ((.hooks.enabled // []) + [$n] | unique)' "$REGISTRY_FILE" > "$tmp"; then
         rm -f "$tmp"
         log_error "Failed to update registry with jq"
         return 1
     fi
-    mv "$tmp" "$REGISTRY_FILE"
+    if ! mv "$tmp" "$REGISTRY_FILE"; then
+        rm -f "$tmp"
+        log_error "Failed to move temp file into $REGISTRY_FILE"
+        return 1
+    fi
 }
 
 # Remove a hook name from the registry's enabled list. Requires jq.
@@ -274,13 +293,18 @@ registry_remove_enabled_hook() {
     fi
     local name="$1"
     local tmp
-    tmp=$(mktemp)
+    # Same-filesystem tmp file — see registry_add_enabled_hook for rationale.
+    tmp=$(mktemp "${REGISTRY_FILE}.XXXXXX")
     if ! jq -c --arg n "$name" '.hooks.enabled = ((.hooks.enabled // []) - [$n])' "$REGISTRY_FILE" > "$tmp"; then
         rm -f "$tmp"
         log_error "Failed to update registry with jq"
         return 1
     fi
-    mv "$tmp" "$REGISTRY_FILE"
+    if ! mv "$tmp" "$REGISTRY_FILE"; then
+        rm -f "$tmp"
+        log_error "Failed to move temp file into $REGISTRY_FILE"
+        return 1
+    fi
 }
 
 # Merge a hook entry into ~/.claude/settings.json (idempotent — replaces any
@@ -314,16 +338,24 @@ settings_merge_hook() {
     fi
 
     local tmp
-    tmp=$(mktemp)
+    # Allocate the tmp file next to $CLAUDE_SETTINGS_FILE (not in $TMPDIR) so
+    # the mv below is guaranteed to be a same-filesystem rename — an atomic
+    # swap rather than a cross-filesystem copy-then-unlink (very common when
+    # $TMPDIR is tmpfs and $HOME is not) that a kill mid-copy could leave
+    # truncated — exactly what this tmp+mv pattern exists to prevent.
+    tmp=$(mktemp "${CLAUDE_SETTINGS_FILE}.XXXXXX")
     # NOTE: ".hooks" at the top level is the settings.json hooks map; the inner
     # ".hooks" (inside each matcher-group object) is that group's own command
     # list — same field name, two different levels of the schema. Strip the
     # matching command from WITHIN each group's .hooks array (not the whole
     # group) so co-located hooks the user configured themselves survive; only
-    # drop a group once its .hooks array is left empty.
+    # drop a group once its .hooks array is left empty. The `(. // [])` guard
+    # on the first map matters: a matcher-group object with no `.hooks` key
+    # at all (a valid-but-unusual settings.json shape) would otherwise make
+    # jq try to iterate over null and error out.
     if ! jq --arg event "$event" --arg matcher "$matcher" --arg cmd "$command" --argjson timeout "$timeout" '
         .hooks[$event] = ((.hooks[$event] // [])
-            | map(.hooks |= map(select(.command != $cmd)))
+            | map(.hooks |= ((. // []) | map(select(.command != $cmd))))
             | map(select((.hooks // []) | length > 0))
             + [{matcher: $matcher, hooks: [{type: "command", command: $cmd, timeout: $timeout}]}])
     ' "$src" > "$tmp"; then
@@ -332,7 +364,11 @@ settings_merge_hook() {
         return 1
     fi
     rm -f "$seed"
-    mv "$tmp" "$CLAUDE_SETTINGS_FILE"
+    if ! mv "$tmp" "$CLAUDE_SETTINGS_FILE"; then
+        rm -f "$tmp"
+        log_error "Failed to move temp file into $CLAUDE_SETTINGS_FILE"
+        return 1
+    fi
 }
 
 # Remove any hook entry matching <command> under <event> from
@@ -354,14 +390,21 @@ settings_remove_hook() {
     fi
 
     local tmp
-    tmp=$(mktemp)
+    # Same-filesystem tmp file — see settings_merge_hook for rationale.
+    tmp=$(mktemp "${CLAUDE_SETTINGS_FILE}.XXXXXX")
     # Strip the matching command from WITHIN each group's .hooks array (not
     # the whole group), so co-located hooks the user configured themselves
-    # survive; only drop a group once its .hooks array is left empty.
+    # survive; only drop a group once its .hooks array is left empty. The
+    # `(. // [])` guard on the first map matters: a matcher-group object with
+    # no `.hooks` key at all (a valid-but-unusual settings.json shape) would
+    # otherwise make jq try to iterate over null and error out — which, on
+    # the uninstall path, currently gets swallowed by disable_all_hooks'
+    # `hook_disable "$name" || true` and leaves a dangling command entry in
+    # the user's real settings.json forever.
     if ! jq --arg event "$event" --arg cmd "$command" '
         if (.hooks[$event]? // null) == null then .
         else .hooks[$event] = (.hooks[$event]
-            | map(.hooks |= map(select(.command != $cmd)))
+            | map(.hooks |= ((. // []) | map(select(.command != $cmd))))
             | map(select((.hooks // []) | length > 0)))
         end
     ' "$CLAUDE_SETTINGS_FILE" > "$tmp"; then
@@ -369,7 +412,11 @@ settings_remove_hook() {
         log_error "Failed to update $CLAUDE_SETTINGS_FILE with jq"
         return 1
     fi
-    mv "$tmp" "$CLAUDE_SETTINGS_FILE"
+    if ! mv "$tmp" "$CLAUDE_SETTINGS_FILE"; then
+        rm -f "$tmp"
+        log_error "Failed to move temp file into $CLAUDE_SETTINGS_FILE"
+        return 1
+    fi
 }
 
 # List canonical hook names available under HOOKS_DIR, one per line.

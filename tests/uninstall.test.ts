@@ -202,3 +202,92 @@ describe("oh-my-skills Uninstall (real script)", () => {
 		expect(r.output).toContain("not installed");
 	});
 });
+
+describe("oh-my-skills Uninstall without jq (real script)", () => {
+	// Regression coverage for the bug where registry_read_enabled_hooks'
+	// non-jq fallback ended in `grep -v '^$'`, which exits 1 on the normal
+	// empty `hooks.enabled: []` case every fresh install writes.
+	// disable_all_hooks does `enabled=$(registry_read_enabled_hooks)` as its
+	// first statement, and both it and uninstall.sh run under
+	// `set -euo pipefail` — so on a jq-less machine, that failing assignment
+	// silently killed the entire uninstall.sh script: no error message, no
+	// goodbye box, shell sourcing already stripped but ~/.oh-my-skills never
+	// removed (a partial, broken uninstall).
+	let container: StartedTestContainer;
+	let id: string;
+
+	beforeAll(async () => {
+		container = await new GenericContainer("alpine:latest")
+			.withCommand(["sleep", "infinity"])
+			.start();
+		id = container.getId();
+
+		exec(id, "apk add --no-cache git bash jq >/dev/null 2>&1");
+
+		exec(id, "mkdir -p /scripts");
+		copyToContainer(id, `${SCRIPTS_DIR}/lib.sh`, "/scripts/lib.sh");
+		copyToContainer(id, `${SCRIPTS_DIR}/install.sh`, "/scripts/install.sh");
+		copyToContainer(id, `${SCRIPTS_DIR}/uninstall.sh`, "/scripts/uninstall.sh");
+		exec(id, "chmod +x /scripts/*.sh");
+
+		// Minimal remote repo — no hooks shipped, so hooks.enabled stays [].
+		exec(id, "mkdir -p /tmp/remote-repo");
+		exec(
+			id,
+			"cd /tmp/remote-repo && git init && git config user.email 't@t' && git config user.name 'T'",
+		);
+		exec(id, "mkdir -p /tmp/remote-repo/src/skills/test-skill");
+		exec(
+			id,
+			`printf '%s\\n' '---' 'name: test-skill' 'description: A test skill' 'by: oh-my-skills' '---' 'Test.' > /tmp/remote-repo/src/skills/test-skill/SKILL.md`,
+		);
+		exec(
+			id,
+			"mkdir -p /tmp/remote-repo/scripts && cp /scripts/*.sh /tmp/remote-repo/scripts/",
+		);
+		copyToContainer(
+			id,
+			`${PROJECT_DIR}/package.json`,
+			"/tmp/remote-repo/package.json",
+		);
+		exec(
+			id,
+			`cd /tmp/remote-repo && git add . && git commit -m 'init' && git tag v${VERSION}`,
+		);
+
+		exec(
+			id,
+			`printf '#!/bin/sh\\necho claude' > /usr/local/bin/claude && chmod +x /usr/local/bin/claude`,
+		);
+		exec(
+			id,
+			`printf '%s\\n' '# original config' 'export LANG=en' > ${HOME}/.bashrc`,
+		);
+
+		// Real install — this is the normal fresh-install state:
+		// registry.json ends up with hooks.enabled == [].
+		exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/install.sh`);
+	}, 60_000);
+
+	afterAll(async () => {
+		if (container) await container.stop();
+	});
+
+	it("has hooks.enabled == [] after a fresh install (sanity check)", () => {
+		const r = exec(id, `cat ${INSTALL}/registry.json`);
+		const registry = JSON.parse(r.output);
+		expect(registry.hooks.enabled).toEqual([]);
+	});
+
+	it("runs uninstall.sh to completion on a machine without jq", () => {
+		exec(id, `mv /usr/bin/jq /usr/bin/jq.bak`);
+		const r = exec(id, `bash /scripts/uninstall.sh --yes`);
+		expect(r.exitCode).toBe(0);
+		expect(r.output).toContain("Uninstallation Complete");
+	});
+
+	it("actually removed ~/.oh-my-skills (not a silent partial uninstall)", () => {
+		const r = exec(id, `test -d ${INSTALL} && echo exists || echo gone`);
+		expect(r.output).toBe("gone");
+	});
+});
