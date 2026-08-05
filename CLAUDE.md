@@ -133,6 +133,7 @@ src/hooks/<name>/
 |---|---|---|
 | Lifecycle scripts (install, uninstall, update) | `tests/*.test.ts` | End-to-end integration in Alpine Docker containers |
 | Shell commands | `src/commands/<name>/<name>.test.ts` | Co-located tests, same Docker infra |
+| Hook scripts | `src/hooks/<name>/hook.test.ts` | Co-located tests, same Docker infra |
 | Skills | Not tested | Quality relies on SKILL.md content |
 
 **Test infrastructure:**
@@ -153,6 +154,8 @@ src/hooks/<name>/
 - `uninstall.test.ts` — Installs first, then runs `uninstall.sh`, verifies complete cleanup + preservation of foreign (non-oh-my-skills) skills
 - `update.test.ts` — Version comparison, no-op when up-to-date, cache lifecycle (write, read, invalidation, TTL), update detection via git tags
 - `lib.test.ts` — Unit tests for shared library functions
+- `hooks.test.ts` — End-to-end `install_hooks`, `hook_enable`, `hook_disable`, `disable_all_hooks` lifecycle; verifies hooks are copied, registered, disabled on uninstall
+- `hooks-cli.test.ts` — End-to-end `oms hooks list/status/enable/disable` CLI commands; verifies settings.json merging and registry tracking
 
 **When to write/modify these tests:**
 - Any behavior change in lifecycle scripts must be reflected in tests
