@@ -607,6 +607,38 @@ describe("lib.sh unit tests", () => {
 			);
 			expect(r.exitCode).toBe(0);
 		});
+
+		it("settings_remove_hook only strips the matching hook from a co-located group, not the whole group", () => {
+			// A single matcher-group can legitimately hold multiple hooks (the
+			// settings.json schema's .hooks is an array precisely for this).
+			// Removing our command must not silently drop the user's own
+			// co-located command in the same group.
+			exec(
+				id,
+				`echo '{"hooks":{"UserPromptSubmit":[{"matcher":"*","hooks":[{"type":"command","command":"/opt/hook.sh","timeout":10},{"type":"command","command":"/my/own/script.sh"}]}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			lib(id, `settings_remove_hook "UserPromptSubmit" "/opt/hook.sh"`);
+			const r = exec(id, `cat ${HOME}/.claude/settings.json`);
+			const settings = JSON.parse(r.output);
+			const commands = settings.hooks.UserPromptSubmit.flatMap((g: any) =>
+				g.hooks.map((h: any) => h.command),
+			);
+			expect(commands).toEqual(["/my/own/script.sh"]);
+		});
+
+		it("settings_merge_hook's idempotent re-merge only strips the matching hook from a co-located group, not the whole group", () => {
+			exec(
+				id,
+				`echo '{"hooks":{"UserPromptSubmit":[{"matcher":"*","hooks":[{"type":"command","command":"/opt/hook.sh","timeout":10},{"type":"command","command":"/my/own/script.sh"}]}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			lib(id, `settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`);
+			const r = exec(id, `cat ${HOME}/.claude/settings.json`);
+			const settings = JSON.parse(r.output);
+			const commands = settings.hooks.UserPromptSubmit.flatMap((g: any) =>
+				g.hooks.map((h: any) => h.command),
+			);
+			expect(commands.sort()).toEqual(["/my/own/script.sh", "/opt/hook.sh"]);
+		});
 	});
 
 	// ─── install_commands() ───────────────────────────────────────────────────

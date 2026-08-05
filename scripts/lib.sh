@@ -295,11 +295,20 @@ settings_merge_hook() {
     local event="$1" matcher="$2" command="$3" timeout="$4"
 
     mkdir -p "$(dirname "$CLAUDE_SETTINGS_FILE")"
+
+    # If the file doesn't exist yet, feed jq an in-memory '{}' seed instead of
+    # writing directly to $CLAUDE_SETTINGS_FILE — the file itself is only ever
+    # written via the tmp+mv below, so a jq failure never touches it.
+    local src="$CLAUDE_SETTINGS_FILE"
+    local seed=""
     if [[ ! -f "$CLAUDE_SETTINGS_FILE" ]]; then
-        echo '{}' > "$CLAUDE_SETTINGS_FILE"
+        seed=$(mktemp)
+        echo '{}' > "$seed"
+        src="$seed"
     fi
 
-    if ! jq empty "$CLAUDE_SETTINGS_FILE" 2>/dev/null; then
+    if ! jq empty "$src" 2>/dev/null; then
+        rm -f "$seed"
         log_error "$CLAUDE_SETTINGS_FILE contains invalid JSON — fix it manually before enabling hooks"
         return 1
     fi
@@ -308,16 +317,21 @@ settings_merge_hook() {
     tmp=$(mktemp)
     # NOTE: ".hooks" at the top level is the settings.json hooks map; the inner
     # ".hooks" (inside each matcher-group object) is that group's own command
-    # list — same field name, two different levels of the schema.
+    # list — same field name, two different levels of the schema. Strip the
+    # matching command from WITHIN each group's .hooks array (not the whole
+    # group) so co-located hooks the user configured themselves survive; only
+    # drop a group once its .hooks array is left empty.
     if ! jq --arg event "$event" --arg matcher "$matcher" --arg cmd "$command" --argjson timeout "$timeout" '
         .hooks[$event] = ((.hooks[$event] // [])
-            | map(select((.hooks // []) | any(.command == $cmd) | not))
+            | map(.hooks |= map(select(.command != $cmd)))
+            | map(select((.hooks // []) | length > 0))
             + [{matcher: $matcher, hooks: [{type: "command", command: $cmd, timeout: $timeout}]}])
-    ' "$CLAUDE_SETTINGS_FILE" > "$tmp"; then
-        rm -f "$tmp"
+    ' "$src" > "$tmp"; then
+        rm -f "$tmp" "$seed"
         log_error "Failed to update $CLAUDE_SETTINGS_FILE with jq"
         return 1
     fi
+    rm -f "$seed"
     mv "$tmp" "$CLAUDE_SETTINGS_FILE"
 }
 
@@ -341,9 +355,14 @@ settings_remove_hook() {
 
     local tmp
     tmp=$(mktemp)
+    # Strip the matching command from WITHIN each group's .hooks array (not
+    # the whole group), so co-located hooks the user configured themselves
+    # survive; only drop a group once its .hooks array is left empty.
     if ! jq --arg event "$event" --arg cmd "$command" '
         if (.hooks[$event]? // null) == null then .
-        else .hooks[$event] = (.hooks[$event] | map(select((.hooks // []) | any(.command == $cmd) | not)))
+        else .hooks[$event] = (.hooks[$event]
+            | map(.hooks |= map(select(.command != $cmd)))
+            | map(select((.hooks // []) | length > 0)))
         end
     ' "$CLAUDE_SETTINGS_FILE" > "$tmp"; then
         rm -f "$tmp"
