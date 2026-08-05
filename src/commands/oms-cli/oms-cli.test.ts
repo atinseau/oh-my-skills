@@ -40,6 +40,7 @@ describe("oms command", () => {
 		expect(result.exitCode).toBe(0);
 		expect(result.output).toContain("Usage: oms");
 		expect(result.output).toContain("update");
+		expect(result.output).toContain("hooks");
 		expect(result.output).toContain("--help");
 	});
 
@@ -52,6 +53,7 @@ describe("oms command", () => {
 		expect(result.exitCode).toBe(0);
 		expect(result.output).toContain("Usage: oms");
 		expect(result.output).toContain("update");
+		expect(result.output).toContain("hooks");
 		expect(result.output).toContain("--help");
 	});
 
@@ -74,6 +76,27 @@ EOF`,
 
 		const recorded = exec(id, `cat ${HOME}/update-args.txt`);
 		expect(recorded.output).toBe("--manual");
+	});
+
+	it("should delegate hooks to the installed hooks script", () => {
+		exec(id, `mkdir -p ${HOME}/.oh-my-skills/scripts`);
+		exec(
+			id,
+			`cat > ${HOME}/.oh-my-skills/scripts/hooks.sh <<'EOF'
+#!/bin/bash
+printf '%s' "$*" > "$HOME/hooks-args.txt"
+EOF`,
+		);
+		exec(id, `chmod +x ${HOME}/.oh-my-skills/scripts/hooks.sh`);
+
+		const result = exec(
+			id,
+			`bash -lc 'source /commands/oms-cli/oms.sh && oms hooks enable sample-hook'`,
+		);
+		expect(result.exitCode).toBe(0);
+
+		const recorded = exec(id, `cat ${HOME}/hooks-args.txt`);
+		expect(recorded.output).toBe("enable sample-hook");
 	});
 
 	it("should print version with --version", () => {

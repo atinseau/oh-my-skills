@@ -200,10 +200,11 @@ describe("oh-my-skills Update (real script)", () => {
 	// ── Update detection via cache ──────────────────────────────────────
 
 	it("should detect update in auto-check when cache has newer version", () => {
-		// Push a new version to the remote repo — also update hi.sh to verify command updates
+		// Push a new version to the remote repo — also update hi.sh to verify command updates,
+		// and add a hook to verify hooks are installed on update
 		exec(
 			id,
-			`cd /tmp/remote-repo && echo bye > src/commands/bye.sh && git add . && git commit -m 'feat(commands): add bye alias' && printf '#!/bin/bash\\nalias hi="echo hi v2"\\n' > src/commands/hi.sh && echo fix > CHANGELOG_FIX && git add . && git commit -m 'fix(update): improve release sync' && git tag v${NEW_VERSION}`,
+			`cd /tmp/remote-repo && echo bye > src/commands/bye.sh && mkdir -p src/hooks/sample-hook && printf '%s' '{"event":"UserPromptSubmit","matcher":"*","timeout":10}' > src/hooks/sample-hook/hook.json && printf '#!/bin/bash\\necho sample-hook\\n' > src/hooks/sample-hook/hook.sh && git add . && git commit -m 'feat(commands): add bye alias' && printf '#!/bin/bash\\nalias hi="echo hi v2"\\n' > src/commands/hi.sh && echo fix > CHANGELOG_FIX && git add . && git commit -m 'fix(update): improve release sync' && git tag v${NEW_VERSION}`,
 		);
 
 		// Simulate what the background fetch would have written: a fresh cache with the new version
@@ -255,6 +256,20 @@ describe("oh-my-skills Update (real script)", () => {
 	it("should have installed new command added in update", () => {
 		const r = exec(id, `test -f ${INSTALL}/commands/bye.sh && echo ok`);
 		expect(r.output).toBe("ok");
+	});
+
+	it("should have installed hook added in update", () => {
+		const meta = exec(
+			id,
+			`test -f ${INSTALL}/hooks/sample-hook/hook.json && echo ok`,
+		);
+		expect(meta.output).toBe("ok");
+
+		const script = exec(
+			id,
+			`test -x ${INSTALL}/hooks/sample-hook/hook.sh && echo ok`,
+		);
+		expect(script.output).toBe("ok");
 	});
 
 	// ── Auto-check with short TTL ───────────────────────────────────────

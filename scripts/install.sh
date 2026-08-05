@@ -61,7 +61,7 @@ main() {
     local user_shell
     user_shell=$(detect_shell)
 
-    init_steps 6
+    init_steps 7
 
     print_step "Detecting shell..."
     log_info "Detected shell: ${CYAN}${BOLD}$user_shell${NC}"
@@ -79,6 +79,9 @@ main() {
 
     print_step "Installing commands..."
     install_commands
+
+    print_step "Installing hooks..."
+    install_hooks
 
     local version
     version=$(get_version)
