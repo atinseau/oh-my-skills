@@ -641,6 +641,80 @@ describe("lib.sh unit tests", () => {
 		});
 	});
 
+	// ─── hook_enable() / hook_disable() ───────────────────────────────────────
+
+	describe("hook_enable() / hook_disable()", () => {
+		it("hooks_list_available lists canonical hook names", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks`);
+			lib(id, `install_hooks`);
+			const r = lib(id, `hooks_list_available`);
+			expect(r.output.split("\n")).toContain("sample-hook");
+		});
+
+		it("hook_enable errors for an unknown hook name", () => {
+			const r = lib(id, `hook_enable "nonexistent-hook"`);
+			expect(r.exitCode).not.toBe(0);
+		});
+
+		it("hook_enable merges into settings.json and updates the registry", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks ${HOME}/.claude/settings.json`);
+			lib(id, `install_hooks && init_registry`);
+			const r = lib(id, `hook_enable "sample-hook"`);
+			expect(r.exitCode).toBe(0);
+
+			const settings = JSON.parse(
+				exec(id, `cat ${HOME}/.claude/settings.json`).output,
+			);
+			expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
+				`${INSTALL}/hooks/sample-hook/hook.sh`,
+			);
+
+			const registry = JSON.parse(
+				exec(id, `cat ${INSTALL}/registry.json`).output,
+			);
+			expect(registry.hooks.enabled).toContain("sample-hook");
+		});
+
+		it("hook_disable removes the settings.json entry and the registry record", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks ${HOME}/.claude/settings.json`);
+			lib(id, `install_hooks && init_registry && hook_enable "sample-hook"`);
+			lib(id, `hook_disable "sample-hook"`);
+
+			const settings = JSON.parse(
+				exec(id, `cat ${HOME}/.claude/settings.json`).output,
+			);
+			const commands = (settings.hooks?.UserPromptSubmit ?? []).flatMap(
+				(g: any) => g.hooks.map((h: any) => h.command),
+			);
+			expect(commands).not.toContain(`${INSTALL}/hooks/sample-hook/hook.sh`);
+
+			const registry = JSON.parse(
+				exec(id, `cat ${INSTALL}/registry.json`).output,
+			);
+			expect(registry.hooks.enabled).not.toContain("sample-hook");
+		});
+
+		it("disable_all_hooks disables every currently-enabled hook", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks ${HOME}/.claude/settings.json`);
+			lib(id, `install_hooks && init_registry && hook_enable "sample-hook"`);
+			lib(id, `disable_all_hooks`);
+
+			const registry = JSON.parse(
+				exec(id, `cat ${INSTALL}/registry.json`).output,
+			);
+			expect(registry.hooks.enabled).toEqual([]);
+		});
+
+		it("hook_enable fails cleanly without jq", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks`);
+			lib(id, `install_hooks && init_registry`);
+			exec(id, `mv /usr/bin/jq /usr/bin/jq.bak`);
+			const r = lib(id, `hook_enable "sample-hook"`);
+			expect(r.exitCode).not.toBe(0);
+			exec(id, `mv /usr/bin/jq.bak /usr/bin/jq`);
+		});
+	});
+
 	// ─── install_commands() ───────────────────────────────────────────────────
 
 	describe("install_commands()", () => {

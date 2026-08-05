@@ -372,6 +372,103 @@ settings_remove_hook() {
     mv "$tmp" "$CLAUDE_SETTINGS_FILE"
 }
 
+# List canonical hook names available under HOOKS_DIR, one per line.
+# Usage: hooks_list_available
+hooks_list_available() {
+    if [[ ! -d "$HOOKS_DIR" ]]; then
+        return 0
+    fi
+    for hook_dir in "$HOOKS_DIR"/*/; do
+        if [[ ! -d "$hook_dir" ]]; then continue; fi
+        if [[ ! -f "$hook_dir/hook.json" ]]; then continue; fi
+        basename "$hook_dir"
+    done
+}
+
+# Register a canonical hook into ~/.claude/settings.json and the registry.
+# Usage: hook_enable <name>
+hook_enable() {
+    local name="$1"
+    local hook_dir="$HOOKS_DIR/$name"
+    local meta="$hook_dir/hook.json"
+
+    if [[ ! -f "$meta" ]]; then
+        log_error "Unknown hook '$name' (no $meta — run 'oms update' first?)"
+        return 1
+    fi
+    if ! command -v jq &> /dev/null; then
+        log_error "jq is required to enable hooks (safe settings.json editing). Install jq and try again."
+        return 1
+    fi
+
+    local event matcher timeout command
+    event=$(jq -r '.event' "$meta")
+    matcher=$(jq -r '.matcher // "*"' "$meta")
+    timeout=$(jq -r '.timeout // 10' "$meta")
+    command="$hook_dir/hook.sh"
+
+    if [[ ! -x "$command" ]]; then
+        log_error "Hook script not found or not executable: $command"
+        return 1
+    fi
+
+    settings_merge_hook "$event" "$matcher" "$command" "$timeout" || return 1
+    registry_add_enabled_hook "$name"
+    log_success "Enabled hook '${CYAN}$name${NC}' on ${event}"
+}
+
+# Remove a hook's registration from ~/.claude/settings.json and the registry.
+# Usage: hook_disable <name>
+hook_disable() {
+    local name="$1"
+    local hook_dir="$HOOKS_DIR/$name"
+    local meta="$hook_dir/hook.json"
+
+    if [[ ! -f "$meta" ]]; then
+        log_error "Unknown hook '$name' (no $meta)"
+        return 1
+    fi
+    if ! command -v jq &> /dev/null; then
+        log_error "jq is required to disable hooks (safe settings.json editing). Install jq and try again."
+        return 1
+    fi
+
+    local event command
+    event=$(jq -r '.event' "$meta")
+    command="$hook_dir/hook.sh"
+
+    settings_remove_hook "$event" "$command" || return 1
+    registry_remove_enabled_hook "$name"
+    log_success "Disabled hook '${CYAN}$name${NC}'"
+}
+
+# Disable every currently-enabled hook. Used by uninstall.sh before the
+# install directory (and therefore every hook script) is deleted. Tolerates
+# missing jq by skipping settings.json cleanup — the target script is about
+# to be deleted anyway, so a dangling command entry is harmless (it will
+# simply fail with "file not found" and be treated as a non-blocking error
+# by Claude Code if ever invoked).
+# Usage: disable_all_hooks
+disable_all_hooks() {
+    local enabled
+    enabled=$(registry_read_enabled_hooks)
+
+    if [[ -z "$enabled" ]]; then
+        return 0
+    fi
+
+    if ! command -v jq &> /dev/null; then
+        log_warning "jq not available — leaving hook entries in $CLAUDE_SETTINGS_FILE (they will simply no-op)"
+        return 0
+    fi
+
+    local name
+    while IFS= read -r name; do
+        [[ -z "$name" ]] && continue
+        hook_disable "$name" || true
+    done <<< "$enabled"
+}
+
 # Extract a YAML frontmatter field from a SKILL.md file
 # Usage: extract_frontmatter "field" "file"
 extract_frontmatter() {
