@@ -19,7 +19,7 @@ bun check-types
 bun run check
 
 # Validate bash script syntax (all lifecycle scripts)
-bash -n scripts/lib.sh && bash -n scripts/install.sh && bash -n scripts/uninstall.sh && bash -n scripts/update.sh
+bash -n scripts/lib.sh && bash -n scripts/install.sh && bash -n scripts/uninstall.sh && bash -n scripts/update.sh && bash -n scripts/hooks.sh
 
 # Run all tests (requires Docker running)
 TESTCONTAINERS_RYUK_DISABLED=true bun test
@@ -48,10 +48,15 @@ Skills follow a **single source of truth** pattern to avoid drift across LLM too
 
 Tracks installed **LLM skill paths** (symlinks and wrappers). Used by `install_skills` for clean reinstall (read → remove old → reset → install fresh) and by `uninstall.sh` for removal. Example: `{"version":"0.1.0","skills":{"claude":["/root/.claude/skills/git-pr-flow/SKILL.md"],"copilot":[...]}}`
 
+### Hooks (`src/hooks/`)
+
+Claude Code hooks follow the same single-source-of-truth pattern as skills: each hook is a directory under `src/hooks/<name>/` with a `hook.json` (event, matcher, timeout) and a `hook.sh` entrypoint. `install.sh`/`update.sh` always copy these to `~/.oh-my-skills/hooks/<name>/` — harmless, like skills/commands. Registering a hook into `~/.claude/settings.json` is a **separate, explicit, opt-in** step via `oms hooks enable <name>` (see `scripts/hooks.sh`), never done automatically. `oms hooks enable`/`disable` require `jq` — safely merging into a shared config file the user didn't create is not attempted with sed/grep. `uninstall.sh` disables every enabled hook before removing the install directory.
+
 ### Source content (`src/`)
 
 - `src/skills/` — Skill directories, each containing a `SKILL.md` with YAML frontmatter and optional subdirectories.
 - `src/commands/` — Shell scripts (`.sh`) defining aliases/functions.
+- `src/hooks/` — Hook directories, each containing a `hook.json` (event/matcher/timeout) and a `hook.sh` entrypoint.
 
 ### Tests (`tests/`)
 
@@ -102,6 +107,23 @@ src/commands/my-cmd/
 - Only `*.sh` files are copied at install — non-shell files (tests, README) stay in repo
 - Use nested layout when a command has tests
 - Commands define shell aliases/functions sourced via `~/.oh-my-skills/shell`
+
+## Contributing: Writing a Hook
+
+**Required structure:**
+```
+src/hooks/<name>/
+├── hook.json      # {"event": "<ClaudeCodeEventName>", "matcher": "*", "timeout": 10}
+├── hook.sh        # Entrypoint — reads Claude Code's stdin JSON, writes stdout JSON
+└── hook.test.ts   # Co-located tests, same pattern as command tests
+```
+
+**Rules:**
+- One `event` per hook directory in v1 — a hook needing multiple events ships as multiple directories sharing a script
+- `hook.sh` must be portable between macOS and Alpine Linux (the test environment) — use `jq` for JSON parsing, not `tac`/`tail -r` or other GNU/BSD-specific tools
+- Fail silently (`exit 0`, no output) on any missing/unexpected input rather than blocking the user's prompt — a hook's job is to nudge, never to break the session
+- `jq` is required for a hook to be enabled/disabled by `oms hooks` — this is enforced by `hook_enable`/`hook_disable` in `lib.sh`, not something individual hooks need to check themselves
+- Test hooks the same way as commands: co-located `hook.test.ts`, testcontainers/Alpine, feeding realistic stdin JSON and asserting on stdout/exit code
 
 ## Contributing: Writing Tests
 
