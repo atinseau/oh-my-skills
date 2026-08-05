@@ -15,6 +15,16 @@ oms() {
             shift
             bash "$update_script" --manual "$@"
             ;;
+        hooks)
+            local hooks_script="${install_dir}/scripts/hooks.sh"
+            if [[ ! -f "$hooks_script" ]]; then
+                echo "oh-my-skills hooks script not found at $hooks_script" >&2
+                return 1
+            fi
+
+            shift
+            bash "$hooks_script" "$@"
+            ;;
         version|--version|-v)
             local registry="$install_dir/registry.json"
             local version="unknown"
@@ -33,6 +43,7 @@ Usage: oms <command>
 
 Commands:
   update      Update oh-my-skills to the latest version
+  hooks       Manage Claude Code hooks (list, enable, disable, status)
   version     Show installed version
   help        Show this help message
 
