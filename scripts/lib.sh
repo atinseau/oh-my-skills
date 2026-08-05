@@ -10,6 +10,7 @@ SKILLS_DIR="$INSTALL_DIR/skills"
 REGISTRY_FILE="$INSTALL_DIR/registry.json"
 SHELL_FILE="$INSTALL_DIR/shell"
 COMMANDS_DIR="$INSTALL_DIR/commands"
+HOOKS_DIR="$INSTALL_DIR/hooks"
 
 # Source of truth for the current release tag.
 # Note: each script also has a _OMS_BOOTSTRAP_TAG for the curl|bash case
@@ -261,7 +262,7 @@ clean_dev_files() {
         base=$(basename "$entry")
 
         case "$base" in
-            .|..|.git|scripts|skills|commands|shell|registry.json|.update-cache)
+            .|..|.git|scripts|skills|commands|hooks|shell|registry.json|.update-cache)
                 continue
                 ;;
         esac
@@ -413,6 +414,33 @@ install_commands() {
     done < <(find "$src_commands_dir" -type f -name "*.sh" -print0)
 
     log_success "Commands copied to $COMMANDS_DIR"
+}
+
+install_hooks() {
+    local src_hooks_dir="$INSTALL_DIR/src/hooks"
+
+    if [[ ! -d "$src_hooks_dir" ]]; then
+        log_warning "No hooks directory found in repository"
+        return 0
+    fi
+
+    mkdir -p "$HOOKS_DIR"
+
+    for hook_dir in "$src_hooks_dir"/*/; do
+        if [[ ! -d "$hook_dir" ]]; then continue; fi
+        if [[ ! -f "$hook_dir/hook.json" ]]; then continue; fi
+
+        local hook_name
+        hook_name=$(basename "$hook_dir")
+        local dest="$HOOKS_DIR/$hook_name"
+        mkdir -p "$dest"
+        cp "$hook_dir/hook.json" "$dest/hook.json"
+        if [[ -f "$hook_dir/hook.sh" ]]; then
+            cp "$hook_dir/hook.sh" "$dest/hook.sh"
+            chmod +x "$dest/hook.sh"
+        fi
+        log_success "Installed canonical hook '${CYAN}$hook_name${NC}'"
+    done
 }
 
 # mode: "install" (default) or "update"

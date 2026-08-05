@@ -64,6 +64,21 @@ describe("lib.sh unit tests", () => {
 			`printf '# Commands README\n' > ${INSTALL}/src/commands/README.md`,
 		);
 
+		// src/hooks (with a hook.test.ts that should NOT be copied)
+		exec(id, `mkdir -p ${INSTALL}/src/hooks/sample-hook`);
+		exec(
+			id,
+			`printf '%s' '{"event":"UserPromptSubmit","matcher":"*","timeout":10}' > ${INSTALL}/src/hooks/sample-hook/hook.json`,
+		);
+		exec(
+			id,
+			`printf '#!/bin/bash\necho sample-hook\n' > ${INSTALL}/src/hooks/sample-hook/hook.sh`,
+		);
+		exec(
+			id,
+			`printf 'import { test } from "bun:test";\n' > ${INSTALL}/src/hooks/sample-hook/hook.test.ts`,
+		);
+
 		// Fake LLM binaries
 		exec(
 			id,
@@ -501,6 +516,89 @@ describe("lib.sh unit tests", () => {
 			expect(r.output).not.toContain("already present");
 			const count = exec(id, `grep -c "oh-my-skills" ${HOME}/.bashrc`);
 			expect(count.output).toBe("1");
+		});
+	});
+
+	// ─── install_hooks() ──────────────────────────────────────────────────────
+
+	describe("install_hooks()", () => {
+		it("copies canonical hook.json and hook.sh to ~/.oh-my-skills/hooks/", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks`);
+			lib(id, `install_hooks`);
+
+			const meta = exec(
+				id,
+				`test -f ${INSTALL}/hooks/sample-hook/hook.json && echo ok`,
+			);
+			expect(meta.output).toBe("ok");
+
+			const script = exec(
+				id,
+				`test -f ${INSTALL}/hooks/sample-hook/hook.sh && echo ok`,
+			);
+			expect(script.output).toBe("ok");
+
+			const content = exec(id, `cat ${INSTALL}/hooks/sample-hook/hook.json`);
+			expect(content.output).toContain("UserPromptSubmit");
+		});
+
+		it("makes hook.sh executable", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks`);
+			lib(id, `install_hooks`);
+			const r = exec(
+				id,
+				`test -x ${INSTALL}/hooks/sample-hook/hook.sh && echo ok`,
+			);
+			expect(r.output).toBe("ok");
+		});
+
+		it("excludes non hook.json/hook.sh files from installation", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks`);
+			lib(id, `install_hooks`);
+			const r = exec(
+				id,
+				`test -f ${INSTALL}/hooks/sample-hook/hook.test.ts && echo found || echo absent`,
+			);
+			expect(r.output).toBe("absent");
+		});
+
+		it("skips hook directories without hook.json", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks`);
+			exec(id, `mkdir -p ${INSTALL}/src/hooks/incomplete-hook`);
+			exec(
+				id,
+				`printf 'echo nope' > ${INSTALL}/src/hooks/incomplete-hook/hook.sh`,
+			);
+
+			lib(id, `install_hooks`);
+			const r = exec(
+				id,
+				`test -d ${INSTALL}/hooks/incomplete-hook && echo found || echo absent`,
+			);
+			expect(r.output).toBe("absent");
+
+			exec(id, `rm -rf ${INSTALL}/src/hooks/incomplete-hook`);
+		});
+
+		it("preserves existing unrelated files under HOOKS_DIR (e.g. .state/)", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks`);
+			exec(id, `mkdir -p ${INSTALL}/hooks/.state`);
+			exec(id, `printf 'marker' > ${INSTALL}/hooks/.state/handoff-nudged-xyz`);
+
+			lib(id, `install_hooks`);
+
+			const r = exec(
+				id,
+				`test -f ${INSTALL}/hooks/.state/handoff-nudged-xyz && echo ok`,
+			);
+			expect(r.output).toBe("ok");
+		});
+
+		it("does nothing when no src/hooks directory exists", () => {
+			exec(id, `mv ${INSTALL}/src/hooks ${INSTALL}/src/hooks.bak`);
+			const r = lib(id, `install_hooks`);
+			expect(r.exitCode).toBe(0);
+			exec(id, `mv ${INSTALL}/src/hooks.bak ${INSTALL}/src/hooks`);
 		});
 	});
 });
