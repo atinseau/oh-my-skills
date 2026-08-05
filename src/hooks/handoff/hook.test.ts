@@ -125,4 +125,16 @@ describe("handoff hook.sh", () => {
 		expect(r.output).toBe("");
 		exec(id, "mv /usr/bin/jq.bak /usr/bin/jq");
 	});
+
+	it("exits silently on malformed (non-JSON) stdin", () => {
+		const r = exec(id, `echo 'not valid json at all' | /hook/hook.sh`);
+		expect(r.exitCode).toBe(0);
+		expect(r.output).toBe("");
+	});
+
+	it("exits silently on wrong-shape JSON stdin (array instead of object)", () => {
+		const r = exec(id, `printf '[1,2,3]' | /hook/hook.sh`);
+		expect(r.exitCode).toBe(0);
+		expect(r.output).toBe("");
+	});
 });

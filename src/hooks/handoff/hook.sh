@@ -18,8 +18,8 @@ if ! command -v jq &> /dev/null; then
     exit 0
 fi
 
-transcript_path=$(echo "$input" | jq -r '.transcript_path // empty')
-session_id=$(echo "$input" | jq -r '.session_id // empty')
+transcript_path=$(echo "$input" | jq -r '.transcript_path // empty' 2>/dev/null) || exit 0
+session_id=$(echo "$input" | jq -r '.session_id // empty' 2>/dev/null) || exit 0
 
 if [[ -z "$transcript_path" || ! -f "$transcript_path" || -z "$session_id" ]]; then
     exit 0
@@ -48,13 +48,13 @@ if [[ $pct -lt $threshold_pct ]]; then
 fi
 
 state_dir="$HOME/.oh-my-skills/hooks/.state"
-mkdir -p "$state_dir"
+mkdir -p "$state_dir" 2>/dev/null || exit 0
 marker="$state_dir/handoff-nudged-${session_id}"
 
 if [[ -f "$marker" ]]; then
     exit 0
 fi
-touch "$marker"
+touch "$marker" 2>/dev/null || exit 0
 
 jq -n --arg pct "$pct" '{
     hookSpecificOutput: {
