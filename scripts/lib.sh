@@ -569,6 +569,16 @@ install_skills() {
 
     if [[ ! -d "$src_skills_dir" ]]; then
         log_warning "No skills directory found in repository"
+        # Registry creation must not depend on skills existing — install_hooks
+        # (and therefore hook_enable/hook_disable) relies on $REGISTRY_FILE
+        # being present regardless of whether this repo ships any skills.
+        # Only create it if missing: src/skills can be transiently absent on
+        # a reinstall (clean_dev_files wipes it, and a no-op `git pull` won't
+        # restore it), and unconditionally rewriting here would wipe out
+        # skills.claude/copilot paths a previous run already tracked.
+        if [[ ! -f "$REGISTRY_FILE" ]]; then
+            registry_write_skills "" ""
+        fi
         return 0
     fi
 
