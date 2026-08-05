@@ -713,6 +713,44 @@ describe("lib.sh unit tests", () => {
 			expect(r.exitCode).not.toBe(0);
 			exec(id, `mv /usr/bin/jq.bak /usr/bin/jq`);
 		});
+
+		it("hook_enable returns non-zero (not a false success) when the registry write fails", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks ${HOME}/.claude/settings.json`);
+			lib(id, `install_hooks && init_registry`);
+			// settings_merge_hook has no dependency on registry.json, so removing
+			// it lets settings.json get mutated successfully while the
+			// subsequent registry_add_enabled_hook call fails — reproducing the
+			// partial-mutation scenario: hook_enable must NOT report success.
+			exec(id, `rm -f ${INSTALL}/registry.json`);
+			const r = lib(id, `hook_enable "sample-hook"`);
+			expect(r.exitCode).not.toBe(0);
+
+			const settings = JSON.parse(
+				exec(id, `cat ${HOME}/.claude/settings.json`).output,
+			);
+			expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
+				`${INSTALL}/hooks/sample-hook/hook.sh`,
+			);
+		});
+
+		it("hook_disable returns non-zero (not a false success) when the registry write fails", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks ${HOME}/.claude/settings.json`);
+			lib(id, `install_hooks && init_registry && hook_enable "sample-hook"`);
+			// Same failure mode as above, on the disable path: settings_remove_hook
+			// succeeds first, then registry_remove_enabled_hook fails because
+			// registry.json is gone — hook_disable must surface that failure.
+			exec(id, `rm -f ${INSTALL}/registry.json`);
+			const r = lib(id, `hook_disable "sample-hook"`);
+			expect(r.exitCode).not.toBe(0);
+
+			const settings = JSON.parse(
+				exec(id, `cat ${HOME}/.claude/settings.json`).output,
+			);
+			const commands = (settings.hooks?.UserPromptSubmit ?? []).flatMap(
+				(g: any) => g.hooks.map((h: any) => h.command),
+			);
+			expect(commands).not.toContain(`${INSTALL}/hooks/sample-hook/hook.sh`);
+		});
 	});
 
 	// ─── install_commands() ───────────────────────────────────────────────────

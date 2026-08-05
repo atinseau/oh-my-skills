@@ -413,7 +413,7 @@ hook_enable() {
     fi
 
     settings_merge_hook "$event" "$matcher" "$command" "$timeout" || return 1
-    registry_add_enabled_hook "$name"
+    registry_add_enabled_hook "$name" || return 1
     log_success "Enabled hook '${CYAN}$name${NC}' on ${event}"
 }
 
@@ -438,7 +438,7 @@ hook_disable() {
     command="$hook_dir/hook.sh"
 
     settings_remove_hook "$event" "$command" || return 1
-    registry_remove_enabled_hook "$name"
+    registry_remove_enabled_hook "$name" || return 1
     log_success "Disabled hook '${CYAN}$name${NC}'"
 }
 
