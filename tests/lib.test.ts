@@ -64,6 +64,21 @@ describe("lib.sh unit tests", () => {
 			`printf '# Commands README\n' > ${INSTALL}/src/commands/README.md`,
 		);
 
+		// src/hooks (with a hook.test.ts that should NOT be copied)
+		exec(id, `mkdir -p ${INSTALL}/src/hooks/sample-hook`);
+		exec(
+			id,
+			`printf '%s' '{"event":"UserPromptSubmit","matcher":"*","timeout":10}' > ${INSTALL}/src/hooks/sample-hook/hook.json`,
+		);
+		exec(
+			id,
+			`printf '#!/bin/bash\necho sample-hook\n' > ${INSTALL}/src/hooks/sample-hook/hook.sh`,
+		);
+		exec(
+			id,
+			`printf 'import { test } from "bun:test";\n' > ${INSTALL}/src/hooks/sample-hook/hook.test.ts`,
+		);
+
 		// Fake LLM binaries
 		exec(
 			id,
@@ -259,6 +274,13 @@ describe("lib.sh unit tests", () => {
 			const registry = JSON.parse(r.output);
 			expect(registry.version).toBe(VERSION);
 		});
+
+		it("initializes registry.json with an empty hooks.enabled list", () => {
+			lib(id, `init_registry`);
+			const r = exec(id, `cat ${INSTALL}/registry.json`);
+			const registry = JSON.parse(r.output);
+			expect(registry.hooks.enabled).toEqual([]);
+		});
 	});
 
 	// ─── install_skills() ─────────────────────────────────────────────────────
@@ -362,6 +384,525 @@ describe("lib.sh unit tests", () => {
 			// Each skill should appear exactly once per LLM
 			const uniqueClaude = new Set(registry.skills.claude);
 			expect(uniqueClaude.size).toBe(registry.skills.claude.length);
+		});
+	});
+
+	// ─── registry_read_paths() ────────────────────────────────────────────────
+	// Regression coverage for the same bug class as registry_read_enabled_hooks
+	// below: an empty skills list is the normal state of a fresh install, and
+	// must never make registry_read_paths propagate a non-zero exit status to
+	// a `paths=$(registry_read_paths)` caller running under `set -euo
+	// pipefail` (install.sh/uninstall.sh, via clean_installed_skills).
+
+	describe("registry_read_paths()", () => {
+		it("does not fail on an empty skills list with jq (set -e safe)", () => {
+			lib(id, `init_registry`); // skills.claude/copilot start out as []
+			const r = exec(
+				id,
+				`bash -c 'source /scripts/lib.sh 2>/dev/null; set -euo pipefail; paths=$(registry_read_paths); echo "ok:[$paths]"'`,
+			);
+			expect(r.exitCode).toBe(0);
+			expect(r.output).toBe("ok:[]");
+		});
+
+		it("does not fail on an empty skills list without jq (set -e safe)", () => {
+			lib(id, `init_registry`);
+			exec(id, `mv /usr/bin/jq /usr/bin/jq.bak`);
+			try {
+				const r = exec(
+					id,
+					`bash -c 'source /scripts/lib.sh 2>/dev/null; set -euo pipefail; paths=$(registry_read_paths); echo "ok:[$paths]"'`,
+				);
+				expect(r.exitCode).toBe(0);
+				expect(r.output).toBe("ok:[]");
+			} finally {
+				exec(id, `mv /usr/bin/jq.bak /usr/bin/jq`);
+			}
+		});
+	});
+
+	// ─── hooks registry ───────────────────────────────────────────────────────
+
+	describe("hooks registry", () => {
+		it("registry_write_skills preserves an existing hooks.enabled list", () => {
+			lib(id, `init_registry`);
+			lib(id, `registry_add_enabled_hook "handoff"`);
+
+			// install_skills calls registry_write_skills internally, which used to
+			// overwrite the whole registry — this must NOT drop the hooks key.
+			exec(id, `rm -rf ${HOME}/.claude/skills`);
+			lib(id, `install_skills`);
+
+			const r = exec(id, `cat ${INSTALL}/registry.json`);
+			const registry = JSON.parse(r.output);
+			expect(registry.hooks.enabled).toEqual(["handoff"]);
+		});
+
+		it("registry_add_enabled_hook is idempotent", () => {
+			lib(id, `init_registry`);
+			lib(id, `registry_add_enabled_hook "handoff"`);
+			lib(id, `registry_add_enabled_hook "handoff"`);
+
+			const r = exec(id, `cat ${INSTALL}/registry.json`);
+			const registry = JSON.parse(r.output);
+			expect(registry.hooks.enabled).toEqual(["handoff"]);
+		});
+
+		it("registry_remove_enabled_hook removes only the named hook", () => {
+			lib(id, `init_registry`);
+			lib(id, `registry_add_enabled_hook "handoff"`);
+			lib(id, `registry_add_enabled_hook "other-hook"`);
+			lib(id, `registry_remove_enabled_hook "handoff"`);
+
+			const r = exec(id, `cat ${INSTALL}/registry.json`);
+			const registry = JSON.parse(r.output);
+			expect(registry.hooks.enabled).toEqual(["other-hook"]);
+		});
+
+		it("registry_read_enabled_hooks prints one name per line", () => {
+			lib(id, `init_registry`);
+			lib(id, `registry_add_enabled_hook "handoff"`);
+			lib(id, `registry_add_enabled_hook "other-hook"`);
+
+			const r = lib(id, `registry_read_enabled_hooks`);
+			expect(r.output.split("\n").sort()).toEqual(["handoff", "other-hook"]);
+		});
+
+		it("registry_write_skills preserves hooks via non-jq fallback", () => {
+			lib(id, `init_registry`);
+			lib(id, `registry_add_enabled_hook "handoff"`);
+
+			// Hide jq to force non-jq code path
+			exec(id, `mv /usr/bin/jq /usr/bin/jq.bak`);
+			try {
+				exec(id, `rm -rf ${HOME}/.claude/skills`);
+				lib(id, `install_skills`);
+
+				const r = exec(id, `cat ${INSTALL}/registry.json`);
+				const registry = JSON.parse(r.output);
+				expect(registry.hooks.enabled).toEqual(["handoff"]);
+			} finally {
+				exec(id, `mv /usr/bin/jq.bak /usr/bin/jq`);
+			}
+		});
+
+		it("registry_read_enabled_hooks does not fail on an empty list with jq (set -e safe)", () => {
+			lib(id, `init_registry`); // hooks.enabled starts out as []
+			// Reproduces the exact disable_all_hooks pattern
+			// (`enabled=$(registry_read_enabled_hooks)`) under `set -euo
+			// pipefail`, as run by uninstall.sh. A failing command
+			// substitution here would abort the whole `bash -c` before the
+			// echo below ever runs.
+			const r = exec(
+				id,
+				`bash -c 'source /scripts/lib.sh 2>/dev/null; set -euo pipefail; enabled=$(registry_read_enabled_hooks); echo "ok:[$enabled]"'`,
+			);
+			expect(r.exitCode).toBe(0);
+			expect(r.output).toBe("ok:[]");
+		});
+
+		it("registry_read_enabled_hooks does not fail on an empty list without jq (set -e safe)", () => {
+			lib(id, `init_registry`);
+			// Hide jq to force the non-jq sed/tr/grep fallback — this is the
+			// exact path where `grep -v '^$'` used to exit 1 on the normal
+			// empty-array case, silently killing uninstall.sh under set -e.
+			exec(id, `mv /usr/bin/jq /usr/bin/jq.bak`);
+			try {
+				const r = exec(
+					id,
+					`bash -c 'source /scripts/lib.sh 2>/dev/null; set -euo pipefail; enabled=$(registry_read_enabled_hooks); echo "ok:[$enabled]"'`,
+				);
+				expect(r.exitCode).toBe(0);
+				expect(r.output).toBe("ok:[]");
+			} finally {
+				exec(id, `mv /usr/bin/jq.bak /usr/bin/jq`);
+			}
+		});
+
+		it("registry_read_enabled_hooks works via non-jq sed fallback", () => {
+			lib(id, `init_registry`);
+			lib(id, `registry_add_enabled_hook "handoff"`);
+			lib(id, `registry_add_enabled_hook "other-hook"`);
+
+			// Hide jq to force non-jq code path
+			exec(id, `mv /usr/bin/jq /usr/bin/jq.bak`);
+			try {
+				const r = lib(id, `registry_read_enabled_hooks`);
+				expect(r.output.split("\n").sort()).toEqual(["handoff", "other-hook"]);
+			} finally {
+				exec(id, `mv /usr/bin/jq.bak /usr/bin/jq`);
+			}
+		});
+
+		it("registry_add_enabled_hook fails safely when jq is absent", () => {
+			lib(id, `init_registry`);
+
+			// Hide jq
+			exec(id, `mv /usr/bin/jq /usr/bin/jq.bak`);
+			try {
+				const r = lib(id, `registry_add_enabled_hook "handoff"`);
+				expect(r.exitCode).not.toBe(0);
+				// Registry should still be intact
+				const reg = exec(id, `cat ${INSTALL}/registry.json`);
+				const registry = JSON.parse(reg.output);
+				expect(registry.version).toBeDefined();
+				expect(registry.skills).toBeDefined();
+				expect(registry.hooks).toBeDefined();
+			} finally {
+				exec(id, `mv /usr/bin/jq.bak /usr/bin/jq`);
+			}
+		});
+
+		it("registry_remove_enabled_hook fails safely when jq is absent", () => {
+			lib(id, `init_registry`);
+			lib(id, `registry_add_enabled_hook "handoff"`);
+
+			// Hide jq
+			exec(id, `mv /usr/bin/jq /usr/bin/jq.bak`);
+			try {
+				const r = lib(id, `registry_remove_enabled_hook "handoff"`);
+				expect(r.exitCode).not.toBe(0);
+				// Registry should still be intact with hooks preserved
+				const reg = exec(id, `cat ${INSTALL}/registry.json`);
+				const registry = JSON.parse(reg.output);
+				expect(registry.hooks.enabled).toEqual(["handoff"]);
+			} finally {
+				exec(id, `mv /usr/bin/jq.bak /usr/bin/jq`);
+			}
+		});
+	});
+
+	// ─── settings_merge_hook() / settings_remove_hook() ──────────────────────
+
+	describe("settings_merge_hook() / settings_remove_hook()", () => {
+		it("creates ~/.claude/settings.json when it doesn't exist", () => {
+			exec(id, `rm -rf ${HOME}/.claude/settings.json`);
+			lib(id, `settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`);
+			const r = exec(id, `test -f ${HOME}/.claude/settings.json && echo ok`);
+			expect(r.output).toBe("ok");
+		});
+
+		it("writes the expected hook entry shape", () => {
+			exec(id, `rm -f ${HOME}/.claude/settings.json`);
+			lib(id, `settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`);
+			const r = exec(id, `cat ${HOME}/.claude/settings.json`);
+			const settings = JSON.parse(r.output);
+			expect(settings.hooks.UserPromptSubmit).toEqual([
+				{
+					matcher: "*",
+					hooks: [{ type: "command", command: "/opt/hook.sh", timeout: 10 }],
+				},
+			]);
+		});
+
+		it("is idempotent — re-merging the same command doesn't duplicate it", () => {
+			exec(id, `rm -f ${HOME}/.claude/settings.json`);
+			lib(id, `settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`);
+			lib(id, `settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`);
+			const r = exec(id, `cat ${HOME}/.claude/settings.json`);
+			const settings = JSON.parse(r.output);
+			expect(settings.hooks.UserPromptSubmit.length).toBe(1);
+		});
+
+		it("preserves pre-existing unrelated hook entries for the same event", () => {
+			exec(
+				id,
+				`echo '{"hooks":{"UserPromptSubmit":[{"matcher":"*","hooks":[{"type":"command","command":"/my/own/script.sh","timeout":5}]}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			lib(id, `settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`);
+			const r = exec(id, `cat ${HOME}/.claude/settings.json`);
+			const settings = JSON.parse(r.output);
+			const commands = settings.hooks.UserPromptSubmit.flatMap((g: any) =>
+				g.hooks.map((h: any) => h.command),
+			);
+			expect(commands.sort()).toEqual(["/my/own/script.sh", "/opt/hook.sh"]);
+		});
+
+		it("preserves pre-existing entries for other events", () => {
+			exec(
+				id,
+				`echo '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/other/script.sh"}]}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			lib(id, `settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`);
+			const r = exec(id, `cat ${HOME}/.claude/settings.json`);
+			const settings = JSON.parse(r.output);
+			expect(settings.hooks.PreToolUse[0].hooks[0].command).toBe(
+				"/other/script.sh",
+			);
+			expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
+				"/opt/hook.sh",
+			);
+		});
+
+		it("aborts without writing when existing settings.json has invalid JSON", () => {
+			exec(id, `printf 'not json{' > ${HOME}/.claude/settings.json`);
+			const r = lib(
+				id,
+				`settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`,
+			);
+			expect(r.exitCode).not.toBe(0);
+			const content = exec(id, `cat ${HOME}/.claude/settings.json`);
+			expect(content.output).toBe("not json{");
+		});
+
+		it("settings_remove_hook removes only the matching command", () => {
+			exec(id, `rm -f ${HOME}/.claude/settings.json`);
+			lib(id, `settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`);
+			// NOTE: uses exec(), not lib() — lib() wraps cmd in an extra
+			// `bash -c '...'` layer, and this echo's own single-quoted JSON
+			// argument breaks that outer quoting (nested single quotes don't
+			// nest in shell). exec() matches every other JSON-seeding line in
+			// this file and round-trips the JSON correctly.
+			exec(
+				id,
+				`echo '{"hooks":{"UserPromptSubmit":[{"matcher":"*","hooks":[{"type":"command","command":"/opt/hook.sh","timeout":10}]},{"matcher":"*","hooks":[{"type":"command","command":"/my/own/script.sh"}]}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			lib(id, `settings_remove_hook "UserPromptSubmit" "/opt/hook.sh"`);
+			const r = exec(id, `cat ${HOME}/.claude/settings.json`);
+			const settings = JSON.parse(r.output);
+			const commands = settings.hooks.UserPromptSubmit.flatMap((g: any) =>
+				g.hooks.map((h: any) => h.command),
+			);
+			expect(commands).toEqual(["/my/own/script.sh"]);
+		});
+
+		it("settings_remove_hook is a no-op success when settings.json doesn't exist", () => {
+			exec(id, `rm -f ${HOME}/.claude/settings.json`);
+			const r = lib(
+				id,
+				`settings_remove_hook "UserPromptSubmit" "/opt/hook.sh"`,
+			);
+			expect(r.exitCode).toBe(0);
+		});
+
+		it("settings_remove_hook only strips the matching hook from a co-located group, not the whole group", () => {
+			// A single matcher-group can legitimately hold multiple hooks (the
+			// settings.json schema's .hooks is an array precisely for this).
+			// Removing our command must not silently drop the user's own
+			// co-located command in the same group.
+			exec(
+				id,
+				`echo '{"hooks":{"UserPromptSubmit":[{"matcher":"*","hooks":[{"type":"command","command":"/opt/hook.sh","timeout":10},{"type":"command","command":"/my/own/script.sh"}]}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			lib(id, `settings_remove_hook "UserPromptSubmit" "/opt/hook.sh"`);
+			const r = exec(id, `cat ${HOME}/.claude/settings.json`);
+			const settings = JSON.parse(r.output);
+			const commands = settings.hooks.UserPromptSubmit.flatMap((g: any) =>
+				g.hooks.map((h: any) => h.command),
+			);
+			expect(commands).toEqual(["/my/own/script.sh"]);
+		});
+
+		it("settings_merge_hook handles a matcher-group with no hooks key at all", () => {
+			// A matcher-group object with no `.hooks` key is a valid-but-unusual
+			// settings.json shape. Without a null guard, jq's `.hooks |= map(...)`
+			// tries to iterate over null and errors out (exit 5, "Cannot iterate
+			// over null"), breaking `oms hooks enable` for any user whose real
+			// settings.json has such a group.
+			exec(
+				id,
+				`echo '{"hooks":{"UserPromptSubmit":[{"matcher":"*"}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			const r = lib(
+				id,
+				`settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`,
+			);
+			expect(r.exitCode).toBe(0);
+			const settings = JSON.parse(
+				exec(id, `cat ${HOME}/.claude/settings.json`).output,
+			);
+			const commands = settings.hooks.UserPromptSubmit.flatMap((g: any) =>
+				(g.hooks ?? []).map((h: any) => h.command),
+			);
+			expect(commands).toContain("/opt/hook.sh");
+		});
+
+		it("settings_merge_hook handles a matcher-group with an empty hooks array", () => {
+			exec(
+				id,
+				`echo '{"hooks":{"UserPromptSubmit":[{"matcher":"*","hooks":[]}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			const r = lib(
+				id,
+				`settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`,
+			);
+			expect(r.exitCode).toBe(0);
+			const settings = JSON.parse(
+				exec(id, `cat ${HOME}/.claude/settings.json`).output,
+			);
+			const commands = settings.hooks.UserPromptSubmit.flatMap((g: any) =>
+				g.hooks.map((h: any) => h.command),
+			);
+			expect(commands).toContain("/opt/hook.sh");
+		});
+
+		it("settings_remove_hook handles a matcher-group with no hooks key at all", () => {
+			// Consequence on the uninstall path if this errors: hook_disable
+			// fails, disable_all_hooks swallows it with `|| true`, uninstall
+			// proceeds to delete ~/.oh-my-skills anyway, and the user is left
+			// with a dangling command entry in their real global settings.json
+			// forever.
+			exec(
+				id,
+				`echo '{"hooks":{"UserPromptSubmit":[{"matcher":"*"},{"matcher":"*","hooks":[{"type":"command","command":"/opt/hook.sh","timeout":10}]}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			const r = lib(
+				id,
+				`settings_remove_hook "UserPromptSubmit" "/opt/hook.sh"`,
+			);
+			expect(r.exitCode).toBe(0);
+			const settings = JSON.parse(
+				exec(id, `cat ${HOME}/.claude/settings.json`).output,
+			);
+			const commands = (settings.hooks.UserPromptSubmit ?? []).flatMap(
+				(g: any) => (g.hooks ?? []).map((h: any) => h.command),
+			);
+			expect(commands).not.toContain("/opt/hook.sh");
+		});
+
+		it("settings_remove_hook handles a matcher-group with an empty hooks array", () => {
+			exec(
+				id,
+				`echo '{"hooks":{"UserPromptSubmit":[{"matcher":"*","hooks":[]},{"matcher":"*","hooks":[{"type":"command","command":"/opt/hook.sh","timeout":10}]}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			const r = lib(
+				id,
+				`settings_remove_hook "UserPromptSubmit" "/opt/hook.sh"`,
+			);
+			expect(r.exitCode).toBe(0);
+			const settings = JSON.parse(
+				exec(id, `cat ${HOME}/.claude/settings.json`).output,
+			);
+			const commands = (settings.hooks.UserPromptSubmit ?? []).flatMap(
+				(g: any) => (g.hooks ?? []).map((h: any) => h.command),
+			);
+			expect(commands).not.toContain("/opt/hook.sh");
+		});
+
+		it("settings_merge_hook's idempotent re-merge only strips the matching hook from a co-located group, not the whole group", () => {
+			exec(
+				id,
+				`echo '{"hooks":{"UserPromptSubmit":[{"matcher":"*","hooks":[{"type":"command","command":"/opt/hook.sh","timeout":10},{"type":"command","command":"/my/own/script.sh"}]}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			lib(id, `settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`);
+			const r = exec(id, `cat ${HOME}/.claude/settings.json`);
+			const settings = JSON.parse(r.output);
+			const commands = settings.hooks.UserPromptSubmit.flatMap((g: any) =>
+				g.hooks.map((h: any) => h.command),
+			);
+			expect(commands.sort()).toEqual(["/my/own/script.sh", "/opt/hook.sh"]);
+		});
+	});
+
+	// ─── hook_enable() / hook_disable() ───────────────────────────────────────
+
+	describe("hook_enable() / hook_disable()", () => {
+		it("hooks_list_available lists canonical hook names", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks`);
+			lib(id, `install_hooks`);
+			const r = lib(id, `hooks_list_available`);
+			expect(r.output.split("\n")).toContain("sample-hook");
+		});
+
+		it("hook_enable errors for an unknown hook name", () => {
+			const r = lib(id, `hook_enable "nonexistent-hook"`);
+			expect(r.exitCode).not.toBe(0);
+		});
+
+		it("hook_enable merges into settings.json and updates the registry", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks ${HOME}/.claude/settings.json`);
+			lib(id, `install_hooks && init_registry`);
+			const r = lib(id, `hook_enable "sample-hook"`);
+			expect(r.exitCode).toBe(0);
+
+			const settings = JSON.parse(
+				exec(id, `cat ${HOME}/.claude/settings.json`).output,
+			);
+			expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
+				`${INSTALL}/hooks/sample-hook/hook.sh`,
+			);
+
+			const registry = JSON.parse(
+				exec(id, `cat ${INSTALL}/registry.json`).output,
+			);
+			expect(registry.hooks.enabled).toContain("sample-hook");
+		});
+
+		it("hook_disable removes the settings.json entry and the registry record", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks ${HOME}/.claude/settings.json`);
+			lib(id, `install_hooks && init_registry && hook_enable "sample-hook"`);
+			lib(id, `hook_disable "sample-hook"`);
+
+			const settings = JSON.parse(
+				exec(id, `cat ${HOME}/.claude/settings.json`).output,
+			);
+			const commands = (settings.hooks?.UserPromptSubmit ?? []).flatMap(
+				(g: any) => g.hooks.map((h: any) => h.command),
+			);
+			expect(commands).not.toContain(`${INSTALL}/hooks/sample-hook/hook.sh`);
+
+			const registry = JSON.parse(
+				exec(id, `cat ${INSTALL}/registry.json`).output,
+			);
+			expect(registry.hooks.enabled).not.toContain("sample-hook");
+		});
+
+		it("disable_all_hooks disables every currently-enabled hook", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks ${HOME}/.claude/settings.json`);
+			lib(id, `install_hooks && init_registry && hook_enable "sample-hook"`);
+			lib(id, `disable_all_hooks`);
+
+			const registry = JSON.parse(
+				exec(id, `cat ${INSTALL}/registry.json`).output,
+			);
+			expect(registry.hooks.enabled).toEqual([]);
+		});
+
+		it("hook_enable fails cleanly without jq", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks`);
+			lib(id, `install_hooks && init_registry`);
+			exec(id, `mv /usr/bin/jq /usr/bin/jq.bak`);
+			const r = lib(id, `hook_enable "sample-hook"`);
+			expect(r.exitCode).not.toBe(0);
+			exec(id, `mv /usr/bin/jq.bak /usr/bin/jq`);
+		});
+
+		it("hook_enable returns non-zero (not a false success) when the registry write fails", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks ${HOME}/.claude/settings.json`);
+			lib(id, `install_hooks && init_registry`);
+			// settings_merge_hook has no dependency on registry.json, so removing
+			// it lets settings.json get mutated successfully while the
+			// subsequent registry_add_enabled_hook call fails — reproducing the
+			// partial-mutation scenario: hook_enable must NOT report success.
+			exec(id, `rm -f ${INSTALL}/registry.json`);
+			const r = lib(id, `hook_enable "sample-hook"`);
+			expect(r.exitCode).not.toBe(0);
+
+			const settings = JSON.parse(
+				exec(id, `cat ${HOME}/.claude/settings.json`).output,
+			);
+			expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
+				`${INSTALL}/hooks/sample-hook/hook.sh`,
+			);
+		});
+
+		it("hook_disable returns non-zero (not a false success) when the registry write fails", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks ${HOME}/.claude/settings.json`);
+			lib(id, `install_hooks && init_registry && hook_enable "sample-hook"`);
+			// Same failure mode as above, on the disable path: settings_remove_hook
+			// succeeds first, then registry_remove_enabled_hook fails because
+			// registry.json is gone — hook_disable must surface that failure.
+			exec(id, `rm -f ${INSTALL}/registry.json`);
+			const r = lib(id, `hook_disable "sample-hook"`);
+			expect(r.exitCode).not.toBe(0);
+
+			const settings = JSON.parse(
+				exec(id, `cat ${HOME}/.claude/settings.json`).output,
+			);
+			const commands = (settings.hooks?.UserPromptSubmit ?? []).flatMap(
+				(g: any) => g.hooks.map((h: any) => h.command),
+			);
+			expect(commands).not.toContain(`${INSTALL}/hooks/sample-hook/hook.sh`);
 		});
 	});
 
@@ -501,6 +1042,89 @@ describe("lib.sh unit tests", () => {
 			expect(r.output).not.toContain("already present");
 			const count = exec(id, `grep -c "oh-my-skills" ${HOME}/.bashrc`);
 			expect(count.output).toBe("1");
+		});
+	});
+
+	// ─── install_hooks() ──────────────────────────────────────────────────────
+
+	describe("install_hooks()", () => {
+		it("copies canonical hook.json and hook.sh to ~/.oh-my-skills/hooks/", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks`);
+			lib(id, `install_hooks`);
+
+			const meta = exec(
+				id,
+				`test -f ${INSTALL}/hooks/sample-hook/hook.json && echo ok`,
+			);
+			expect(meta.output).toBe("ok");
+
+			const script = exec(
+				id,
+				`test -f ${INSTALL}/hooks/sample-hook/hook.sh && echo ok`,
+			);
+			expect(script.output).toBe("ok");
+
+			const content = exec(id, `cat ${INSTALL}/hooks/sample-hook/hook.json`);
+			expect(content.output).toContain("UserPromptSubmit");
+		});
+
+		it("makes hook.sh executable", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks`);
+			lib(id, `install_hooks`);
+			const r = exec(
+				id,
+				`test -x ${INSTALL}/hooks/sample-hook/hook.sh && echo ok`,
+			);
+			expect(r.output).toBe("ok");
+		});
+
+		it("excludes non hook.json/hook.sh files from installation", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks`);
+			lib(id, `install_hooks`);
+			const r = exec(
+				id,
+				`test -f ${INSTALL}/hooks/sample-hook/hook.test.ts && echo found || echo absent`,
+			);
+			expect(r.output).toBe("absent");
+		});
+
+		it("skips hook directories without hook.json", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks`);
+			exec(id, `mkdir -p ${INSTALL}/src/hooks/incomplete-hook`);
+			exec(
+				id,
+				`printf 'echo nope' > ${INSTALL}/src/hooks/incomplete-hook/hook.sh`,
+			);
+
+			lib(id, `install_hooks`);
+			const r = exec(
+				id,
+				`test -d ${INSTALL}/hooks/incomplete-hook && echo found || echo absent`,
+			);
+			expect(r.output).toBe("absent");
+
+			exec(id, `rm -rf ${INSTALL}/src/hooks/incomplete-hook`);
+		});
+
+		it("preserves existing unrelated files under HOOKS_DIR (e.g. .state/)", () => {
+			exec(id, `rm -rf ${INSTALL}/hooks`);
+			exec(id, `mkdir -p ${INSTALL}/hooks/.state`);
+			exec(id, `printf 'marker' > ${INSTALL}/hooks/.state/handoff-nudged-xyz`);
+
+			lib(id, `install_hooks`);
+
+			const r = exec(
+				id,
+				`test -f ${INSTALL}/hooks/.state/handoff-nudged-xyz && echo ok`,
+			);
+			expect(r.output).toBe("ok");
+		});
+
+		it("does nothing when no src/hooks directory exists", () => {
+			exec(id, `mv ${INSTALL}/src/hooks ${INSTALL}/src/hooks.bak`);
+			const r = lib(id, `install_hooks`);
+			expect(r.exitCode).toBe(0);
+			exec(id, `mv ${INSTALL}/src/hooks.bak ${INSTALL}/src/hooks`);
 		});
 	});
 });

@@ -21,6 +21,6 @@ jobs:
       - run: bun check-types
 
       - name: Validate bash scripts syntax
-        run: bash -n scripts/install.sh && bash -n scripts/uninstall.sh && bash -n scripts/update.sh
+        run: bash -n scripts/install.sh && bash -n scripts/uninstall.sh && bash -n scripts/update.sh && bash -n scripts/hooks.sh
 
       - run: TESTCONTAINERS_RYUK_DISABLED=true bun test --timeout 60000

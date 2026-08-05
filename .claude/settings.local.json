@@ -35,8 +35,5 @@
 			"Bash(awk '/^## Step 7 — MEMORIZE/,/^## /' src/skills/forge/SKILL.md)",
 			"Bash(bun biome *)"
 		]
-	},
-	"enabledPlugins": {
-		"claude-mem@thedotmack": true
 	}
 }

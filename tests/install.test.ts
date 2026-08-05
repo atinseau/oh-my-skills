@@ -52,6 +52,15 @@ describe("oh-my-skills install.sh (e2e)", () => {
 			`${PROJECT_DIR}/src/commands/oms-cli/oms.sh`,
 			"/tmp/remote-repo/src/commands/oms-cli/oms.sh",
 		);
+		exec(id, "mkdir -p /tmp/remote-repo/src/hooks/sample-hook");
+		exec(
+			id,
+			`printf '%s' '{"event":"UserPromptSubmit","matcher":"*","timeout":10}' > /tmp/remote-repo/src/hooks/sample-hook/hook.json`,
+		);
+		exec(
+			id,
+			`printf '#!/bin/bash\necho sample-hook\n' > /tmp/remote-repo/src/hooks/sample-hook/hook.sh`,
+		);
 		exec(id, "mkdir -p /tmp/remote-repo/scripts");
 		exec(id, "cp /scripts/*.sh /tmp/remote-repo/scripts/");
 		copyToContainer(
@@ -167,6 +176,27 @@ describe("oh-my-skills install.sh (e2e)", () => {
 		expect(r.exitCode).toBe(0);
 		expect(r.output).toContain("Usage: oms");
 		expect(r.output).toContain("update");
+	});
+
+	it("should install canonical hook files without registering them in settings.json", () => {
+		const meta = exec(
+			id,
+			`test -f ${INSTALL}/hooks/sample-hook/hook.json && echo ok`,
+		);
+		expect(meta.output).toBe("ok");
+
+		const script = exec(
+			id,
+			`test -x ${INSTALL}/hooks/sample-hook/hook.sh && echo ok`,
+		);
+		expect(script.output).toBe("ok");
+
+		// Install must never touch ~/.claude/settings.json on its own
+		const settings = exec(
+			id,
+			`test -f ${HOME}/.claude/settings.json && echo exists || echo absent`,
+		);
+		expect(settings.output).toBe("absent");
 	});
 
 	describe("clean reinstall", () => {

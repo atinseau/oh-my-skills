@@ -10,6 +10,8 @@ SKILLS_DIR="$INSTALL_DIR/skills"
 REGISTRY_FILE="$INSTALL_DIR/registry.json"
 SHELL_FILE="$INSTALL_DIR/shell"
 COMMANDS_DIR="$INSTALL_DIR/commands"
+HOOKS_DIR="$INSTALL_DIR/hooks"
+CLAUDE_SETTINGS_FILE="$HOME/.claude/settings.json"
 
 # Source of truth for the current release tag.
 # Note: each script also has a _OMS_BOOTSTRAP_TAG for the curl|bash case
@@ -171,7 +173,7 @@ get_version() {
 init_registry() {
     local version
     version=$(get_version)
-    echo "{\"version\":\"$version\",\"skills\":{\"claude\":[],\"copilot\":[]}}" > "$REGISTRY_FILE"
+    echo "{\"version\":\"$version\",\"skills\":{\"claude\":[],\"copilot\":[]},\"hooks\":{\"enabled\":[]}}" > "$REGISTRY_FILE"
     log_success "Registry initialized (v$version)"
 }
 
@@ -181,10 +183,15 @@ registry_read_paths() {
     if [[ ! -f "$REGISTRY_FILE" ]]; then
         return 0
     fi
+    # This function's whole contract is "print paths or nothing" — an empty
+    # skills list is the normal state of a fresh install, not an error, so
+    # neither branch may propagate a "no results" exit status to the caller
+    # (both branches run under `set -euo pipefail` in install.sh/uninstall.sh,
+    # where a failing command substitution aborts the entire script).
     if command -v jq &> /dev/null; then
-        jq -r '.skills.claude[]?, .skills.copilot[]?' "$REGISTRY_FILE" 2>/dev/null
+        jq -r '.skills.claude[]?, .skills.copilot[]?' "$REGISTRY_FILE" 2>/dev/null || true
     else
-        grep -oE '"(/[^"]+)"' "$REGISTRY_FILE" 2>/dev/null | tr -d '"'
+        grep -oE '"(/[^"]+)"' "$REGISTRY_FILE" 2>/dev/null | tr -d '"' || true
     fi
 }
 
@@ -205,8 +212,12 @@ registry_write_skills() {
         if [[ -n "$copilot_paths" ]]; then
             copilot_json=$(echo "$copilot_paths" | tr '|' '\n' | jq -R . | jq -s .)
         fi
-        jq -n --arg v "$version" --argjson c "$claude_json" --argjson p "$copilot_json" \
-            '{"version":$v,"skills":{"claude":$c,"copilot":$p}}' > "$REGISTRY_FILE"
+        local hooks_json='{"enabled":[]}'
+        if [[ -f "$REGISTRY_FILE" ]]; then
+            hooks_json=$(jq -c '.hooks // {"enabled":[]}' "$REGISTRY_FILE" 2>/dev/null || echo '{"enabled":[]}')
+        fi
+        jq -n --arg v "$version" --argjson c "$claude_json" --argjson p "$copilot_json" --argjson h "$hooks_json" \
+            '{"version":$v,"skills":{"claude":$c,"copilot":$p},"hooks":$h}' > "$REGISTRY_FILE"
     else
         # Without jq: build JSON manually
         local claude_arr=""
@@ -217,8 +228,292 @@ registry_write_skills() {
         if [[ -n "$copilot_paths" ]]; then
             copilot_arr=$(echo "$copilot_paths" | tr '|' '\n' | sed 's/.*/"&"/' | tr '\n' ',' | sed 's/,$//')
         fi
-        echo "{\"version\":\"$version\",\"skills\":{\"claude\":[${claude_arr}],\"copilot\":[${copilot_arr}]}}" > "$REGISTRY_FILE"
+        local hooks_field='"hooks":{"enabled":[]}'
+        if [[ -f "$REGISTRY_FILE" ]]; then
+            local existing_hooks
+            existing_hooks=$(sed -n 's/.*\("hooks":{[^}]*}\).*/\1/p' "$REGISTRY_FILE" 2>/dev/null | head -1)
+            [[ -n "$existing_hooks" ]] && hooks_field="$existing_hooks"
+        fi
+        echo "{\"version\":\"$version\",\"skills\":{\"claude\":[${claude_arr}],\"copilot\":[${copilot_arr}]},${hooks_field}}" > "$REGISTRY_FILE"
     fi
+}
+
+# Read enabled hook names from the registry, one per line.
+# Usage: registry_read_enabled_hooks
+registry_read_enabled_hooks() {
+    if [[ ! -f "$REGISTRY_FILE" ]]; then
+        return 0
+    fi
+    # Same "print names or nothing, never fail" contract as registry_read_paths
+    # above — an empty `hooks.enabled` array is what every fresh install
+    # writes, and the non-jq fallback's trailing `grep -v '^$'` exits 1 on
+    # that normal empty case (grep's "no matches" exit code), which would
+    # otherwise abort callers running under `set -euo pipefail`
+    # (disable_all_hooks is called directly from uninstall.sh).
+    if command -v jq &> /dev/null; then
+        jq -r '.hooks.enabled[]?' "$REGISTRY_FILE" 2>/dev/null || true
+    else
+        sed -n 's/.*"enabled"[[:space:]]*:[[:space:]]*\[\(.*\)\].*/\1/p' "$REGISTRY_FILE" 2>/dev/null \
+            | tr ',' '\n' | tr -d '" ' | grep -v '^$' || true
+    fi
+}
+
+# Add a hook name to the registry's enabled list (idempotent). Requires jq.
+# Usage: registry_add_enabled_hook "handoff"
+registry_add_enabled_hook() {
+    if ! command -v jq &> /dev/null; then
+        log_error "jq is required for registry_add_enabled_hook"
+        return 1
+    fi
+    local name="$1"
+    local tmp
+    # Allocate the tmp file next to $REGISTRY_FILE (not in $TMPDIR) so the mv
+    # below is guaranteed to be a same-filesystem rename — an atomic swap
+    # rather than a cross-filesystem copy-then-unlink that a kill mid-copy
+    # could leave truncated.
+    tmp=$(mktemp "${REGISTRY_FILE}.XXXXXX")
+    if ! jq -c --arg n "$name" '.hooks.enabled = ((.hooks.enabled // []) + [$n] | unique)' "$REGISTRY_FILE" > "$tmp"; then
+        rm -f "$tmp"
+        log_error "Failed to update registry with jq"
+        return 1
+    fi
+    if ! mv "$tmp" "$REGISTRY_FILE"; then
+        rm -f "$tmp"
+        log_error "Failed to move temp file into $REGISTRY_FILE"
+        return 1
+    fi
+}
+
+# Remove a hook name from the registry's enabled list. Requires jq.
+# Usage: registry_remove_enabled_hook "handoff"
+registry_remove_enabled_hook() {
+    if ! command -v jq &> /dev/null; then
+        log_error "jq is required for registry_remove_enabled_hook"
+        return 1
+    fi
+    local name="$1"
+    local tmp
+    # Same-filesystem tmp file — see registry_add_enabled_hook for rationale.
+    tmp=$(mktemp "${REGISTRY_FILE}.XXXXXX")
+    if ! jq -c --arg n "$name" '.hooks.enabled = ((.hooks.enabled // []) - [$n])' "$REGISTRY_FILE" > "$tmp"; then
+        rm -f "$tmp"
+        log_error "Failed to update registry with jq"
+        return 1
+    fi
+    if ! mv "$tmp" "$REGISTRY_FILE"; then
+        rm -f "$tmp"
+        log_error "Failed to move temp file into $REGISTRY_FILE"
+        return 1
+    fi
+}
+
+# Merge a hook entry into ~/.claude/settings.json (idempotent — replaces any
+# existing entry with the same command). Requires jq. Never touches entries
+# for OTHER commands, including hooks the user configured themselves.
+# Usage: settings_merge_hook <event> <matcher> <command> <timeout>
+settings_merge_hook() {
+    if ! command -v jq &> /dev/null; then
+        log_error "jq is required for settings_merge_hook"
+        return 1
+    fi
+    local event="$1" matcher="$2" command="$3" timeout="$4"
+
+    mkdir -p "$(dirname "$CLAUDE_SETTINGS_FILE")"
+
+    # If the file doesn't exist yet, feed jq an in-memory '{}' seed instead of
+    # writing directly to $CLAUDE_SETTINGS_FILE — the file itself is only ever
+    # written via the tmp+mv below, so a jq failure never touches it.
+    local src="$CLAUDE_SETTINGS_FILE"
+    local seed=""
+    if [[ ! -f "$CLAUDE_SETTINGS_FILE" ]]; then
+        seed=$(mktemp)
+        echo '{}' > "$seed"
+        src="$seed"
+    fi
+
+    if ! jq empty "$src" 2>/dev/null; then
+        rm -f "$seed"
+        log_error "$CLAUDE_SETTINGS_FILE contains invalid JSON — fix it manually before enabling hooks"
+        return 1
+    fi
+
+    local tmp
+    # Allocate the tmp file next to $CLAUDE_SETTINGS_FILE (not in $TMPDIR) so
+    # the mv below is guaranteed to be a same-filesystem rename — an atomic
+    # swap rather than a cross-filesystem copy-then-unlink (very common when
+    # $TMPDIR is tmpfs and $HOME is not) that a kill mid-copy could leave
+    # truncated — exactly what this tmp+mv pattern exists to prevent.
+    tmp=$(mktemp "${CLAUDE_SETTINGS_FILE}.XXXXXX")
+    # NOTE: ".hooks" at the top level is the settings.json hooks map; the inner
+    # ".hooks" (inside each matcher-group object) is that group's own command
+    # list — same field name, two different levels of the schema. Strip the
+    # matching command from WITHIN each group's .hooks array (not the whole
+    # group) so co-located hooks the user configured themselves survive; only
+    # drop a group once its .hooks array is left empty. The `(. // [])` guard
+    # on the first map matters: a matcher-group object with no `.hooks` key
+    # at all (a valid-but-unusual settings.json shape) would otherwise make
+    # jq try to iterate over null and error out.
+    if ! jq --arg event "$event" --arg matcher "$matcher" --arg cmd "$command" --argjson timeout "$timeout" '
+        .hooks[$event] = ((.hooks[$event] // [])
+            | map(.hooks |= ((. // []) | map(select(.command != $cmd))))
+            | map(select((.hooks // []) | length > 0))
+            + [{matcher: $matcher, hooks: [{type: "command", command: $cmd, timeout: $timeout}]}])
+    ' "$src" > "$tmp"; then
+        rm -f "$tmp" "$seed"
+        log_error "Failed to update $CLAUDE_SETTINGS_FILE with jq"
+        return 1
+    fi
+    rm -f "$seed"
+    if ! mv "$tmp" "$CLAUDE_SETTINGS_FILE"; then
+        rm -f "$tmp"
+        log_error "Failed to move temp file into $CLAUDE_SETTINGS_FILE"
+        return 1
+    fi
+}
+
+# Remove any hook entry matching <command> under <event> from
+# ~/.claude/settings.json. Requires jq. Success no-op if the file is absent.
+# Usage: settings_remove_hook <event> <command>
+settings_remove_hook() {
+    if [[ ! -f "$CLAUDE_SETTINGS_FILE" ]]; then
+        return 0
+    fi
+    if ! command -v jq &> /dev/null; then
+        log_error "jq is required for settings_remove_hook"
+        return 1
+    fi
+    local event="$1" command="$2"
+
+    if ! jq empty "$CLAUDE_SETTINGS_FILE" 2>/dev/null; then
+        log_error "$CLAUDE_SETTINGS_FILE contains invalid JSON — fix it manually"
+        return 1
+    fi
+
+    local tmp
+    # Same-filesystem tmp file — see settings_merge_hook for rationale.
+    tmp=$(mktemp "${CLAUDE_SETTINGS_FILE}.XXXXXX")
+    # Strip the matching command from WITHIN each group's .hooks array (not
+    # the whole group), so co-located hooks the user configured themselves
+    # survive; only drop a group once its .hooks array is left empty. The
+    # `(. // [])` guard on the first map matters: a matcher-group object with
+    # no `.hooks` key at all (a valid-but-unusual settings.json shape) would
+    # otherwise make jq try to iterate over null and error out — which, on
+    # the uninstall path, currently gets swallowed by disable_all_hooks'
+    # `hook_disable "$name" || true` and leaves a dangling command entry in
+    # the user's real settings.json forever.
+    if ! jq --arg event "$event" --arg cmd "$command" '
+        if (.hooks[$event]? // null) == null then .
+        else .hooks[$event] = (.hooks[$event]
+            | map(.hooks |= ((. // []) | map(select(.command != $cmd))))
+            | map(select((.hooks // []) | length > 0)))
+        end
+    ' "$CLAUDE_SETTINGS_FILE" > "$tmp"; then
+        rm -f "$tmp"
+        log_error "Failed to update $CLAUDE_SETTINGS_FILE with jq"
+        return 1
+    fi
+    if ! mv "$tmp" "$CLAUDE_SETTINGS_FILE"; then
+        rm -f "$tmp"
+        log_error "Failed to move temp file into $CLAUDE_SETTINGS_FILE"
+        return 1
+    fi
+}
+
+# List canonical hook names available under HOOKS_DIR, one per line.
+# Usage: hooks_list_available
+hooks_list_available() {
+    if [[ ! -d "$HOOKS_DIR" ]]; then
+        return 0
+    fi
+    for hook_dir in "$HOOKS_DIR"/*/; do
+        if [[ ! -d "$hook_dir" ]]; then continue; fi
+        if [[ ! -f "$hook_dir/hook.json" ]]; then continue; fi
+        basename "$hook_dir"
+    done
+}
+
+# Register a canonical hook into ~/.claude/settings.json and the registry.
+# Usage: hook_enable <name>
+hook_enable() {
+    local name="$1"
+    local hook_dir="$HOOKS_DIR/$name"
+    local meta="$hook_dir/hook.json"
+
+    if [[ ! -f "$meta" ]]; then
+        log_error "Unknown hook '$name' (no $meta — run 'oms update' first?)"
+        return 1
+    fi
+    if ! command -v jq &> /dev/null; then
+        log_error "jq is required to enable hooks (safe settings.json editing). Install jq and try again."
+        return 1
+    fi
+
+    local event matcher timeout command
+    event=$(jq -r '.event' "$meta")
+    matcher=$(jq -r '.matcher // "*"' "$meta")
+    timeout=$(jq -r '.timeout // 10' "$meta")
+    command="$hook_dir/hook.sh"
+
+    if [[ ! -x "$command" ]]; then
+        log_error "Hook script not found or not executable: $command"
+        return 1
+    fi
+
+    settings_merge_hook "$event" "$matcher" "$command" "$timeout" || return 1
+    registry_add_enabled_hook "$name" || return 1
+    log_success "Enabled hook '${CYAN}$name${NC}' on ${event}"
+}
+
+# Remove a hook's registration from ~/.claude/settings.json and the registry.
+# Usage: hook_disable <name>
+hook_disable() {
+    local name="$1"
+    local hook_dir="$HOOKS_DIR/$name"
+    local meta="$hook_dir/hook.json"
+
+    if [[ ! -f "$meta" ]]; then
+        log_error "Unknown hook '$name' (no $meta)"
+        return 1
+    fi
+    if ! command -v jq &> /dev/null; then
+        log_error "jq is required to disable hooks (safe settings.json editing). Install jq and try again."
+        return 1
+    fi
+
+    local event command
+    event=$(jq -r '.event' "$meta")
+    command="$hook_dir/hook.sh"
+
+    settings_remove_hook "$event" "$command" || return 1
+    registry_remove_enabled_hook "$name" || return 1
+    log_success "Disabled hook '${CYAN}$name${NC}'"
+}
+
+# Disable every currently-enabled hook. Used by uninstall.sh before the
+# install directory (and therefore every hook script) is deleted. Tolerates
+# missing jq by skipping settings.json cleanup — the target script is about
+# to be deleted anyway, so a dangling command entry is harmless (it will
+# simply fail with "file not found" and be treated as a non-blocking error
+# by Claude Code if ever invoked).
+# Usage: disable_all_hooks
+disable_all_hooks() {
+    local enabled
+    enabled=$(registry_read_enabled_hooks)
+
+    if [[ -z "$enabled" ]]; then
+        return 0
+    fi
+
+    if ! command -v jq &> /dev/null; then
+        log_warning "jq not available — leaving hook entries in $CLAUDE_SETTINGS_FILE (they will simply no-op)"
+        return 0
+    fi
+
+    local name
+    while IFS= read -r name; do
+        [[ -z "$name" ]] && continue
+        hook_disable "$name" || true
+    done <<< "$enabled"
 }
 
 # Extract a YAML frontmatter field from a SKILL.md file
@@ -261,7 +556,7 @@ clean_dev_files() {
         base=$(basename "$entry")
 
         case "$base" in
-            .|..|.git|scripts|skills|commands|shell|registry.json|.update-cache)
+            .|..|.git|scripts|skills|commands|hooks|shell|registry.json|.update-cache)
                 continue
                 ;;
         esac
@@ -321,6 +616,16 @@ install_skills() {
 
     if [[ ! -d "$src_skills_dir" ]]; then
         log_warning "No skills directory found in repository"
+        # Registry creation must not depend on skills existing — install_hooks
+        # (and therefore hook_enable/hook_disable) relies on $REGISTRY_FILE
+        # being present regardless of whether this repo ships any skills.
+        # Only create it if missing: src/skills can be transiently absent on
+        # a reinstall (clean_dev_files wipes it, and a no-op `git pull` won't
+        # restore it), and unconditionally rewriting here would wipe out
+        # skills.claude/copilot paths a previous run already tracked.
+        if [[ ! -f "$REGISTRY_FILE" ]]; then
+            registry_write_skills "" ""
+        fi
         return 0
     fi
 
@@ -413,6 +718,33 @@ install_commands() {
     done < <(find "$src_commands_dir" -type f -name "*.sh" -print0)
 
     log_success "Commands copied to $COMMANDS_DIR"
+}
+
+install_hooks() {
+    local src_hooks_dir="$INSTALL_DIR/src/hooks"
+
+    if [[ ! -d "$src_hooks_dir" ]]; then
+        log_warning "No hooks directory found in repository"
+        return 0
+    fi
+
+    mkdir -p "$HOOKS_DIR"
+
+    for hook_dir in "$src_hooks_dir"/*/; do
+        if [[ ! -d "$hook_dir" ]]; then continue; fi
+        if [[ ! -f "$hook_dir/hook.json" ]]; then continue; fi
+
+        local hook_name
+        hook_name=$(basename "$hook_dir")
+        local dest="$HOOKS_DIR/$hook_name"
+        mkdir -p "$dest"
+        cp "$hook_dir/hook.json" "$dest/hook.json"
+        if [[ -f "$hook_dir/hook.sh" ]]; then
+            cp "$hook_dir/hook.sh" "$dest/hook.sh"
+            chmod +x "$dest/hook.sh"
+        fi
+        log_success "Installed canonical hook '${CYAN}$hook_name${NC}'"
+    done
 }
 
 # mode: "install" (default) or "update"

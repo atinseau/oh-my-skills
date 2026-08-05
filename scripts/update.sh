@@ -189,6 +189,7 @@ apply_update() {
     detect_llms
     install_skills
     install_commands
+    install_hooks
     clean_dev_files
     create_shell_sourcing "update"
     inject_sourcing "$user_shell" "update"
