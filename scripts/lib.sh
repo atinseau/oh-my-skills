@@ -17,7 +17,7 @@ CLAUDE_SETTINGS_FILE="$HOME/.claude/settings.json"
 # Note: each script also has a _OMS_BOOTSTRAP_TAG for the curl|bash case
 # (chicken-and-egg: need the tag to download lib.sh, but tag lives here).
 # The release workflow patches both locations.
-DEFAULT_TAG="v1.1.0" # Source of truth for the current release tag.
+DEFAULT_TAG="" # Source of truth for the current release tag.
 
 # ─── Colors — AI Neon palette ─────────────────────────────────────────────────
 
