@@ -46,6 +46,15 @@ describe("oh-my-skills Uninstall (real script)", () => {
 			id,
 			`printf '#!/bin/bash\\nalias hi="echo hi"\\n' > /tmp/remote-repo/src/commands/hi.sh`,
 		);
+		exec(id, "mkdir -p /tmp/remote-repo/src/hooks/sample-hook");
+		exec(
+			id,
+			`printf '%s' '{"event":"UserPromptSubmit","matcher":"*","timeout":10}' > /tmp/remote-repo/src/hooks/sample-hook/hook.json`,
+		);
+		exec(
+			id,
+			`printf '#!/bin/bash\necho sample-hook\n' > /tmp/remote-repo/src/hooks/sample-hook/hook.sh`,
+		);
 		exec(
 			id,
 			"mkdir -p /tmp/remote-repo/scripts && cp /scripts/*.sh /tmp/remote-repo/scripts/",
@@ -78,6 +87,19 @@ describe("oh-my-skills Uninstall (real script)", () => {
 
 		// Run install first
 		exec(id, `REPO_URL=/tmp/remote-repo bash /scripts/install.sh`);
+
+		// Enable the sample hook so uninstall has something real to clean up.
+		// NOTE: deliberately does NOT call init_registry here (unlike the
+		// snippet suggested in the task brief) — init_registry unconditionally
+		// overwrites registry.json, including the skills.claude/copilot arrays
+		// that install.sh's install_skills step just populated. Calling it here
+		// wiped that skill-tracking data and broke the "should have removed
+		// Claude symlink/Copilot wrapper for test-skill" assertions below, since
+		// uninstall's remove_skills() relies on the registry to know what to
+		// remove. install.sh (via install_hooks -> install_skills's
+		// registry_write_skills) already leaves registry.json as valid JSON
+		// with a `.hooks.enabled` key, so hook_enable works directly.
+		exec(id, `bash -c 'source /scripts/lib.sh; hook_enable "sample-hook"'`);
 
 		// Also create a foreign skill in Claude's skills dir (not from oh-my-skills)
 		exec(id, `mkdir -p ${HOME}/.claude/skills`);
@@ -155,6 +177,18 @@ describe("oh-my-skills Uninstall (real script)", () => {
 	it("should have preserved original .bashrc content", () => {
 		const r = exec(id, `cat ${HOME}/.bashrc`);
 		expect(r.output).toContain("original config");
+	});
+
+	it("should have removed the hook entry from ~/.claude/settings.json", () => {
+		const r = exec(
+			id,
+			`cat ${HOME}/.claude/settings.json 2>/dev/null || echo '{}'`,
+		);
+		const settings = JSON.parse(r.output);
+		const commands = (settings.hooks?.UserPromptSubmit ?? []).flatMap(
+			(g: any) => g.hooks.map((h: any) => h.command),
+		);
+		expect(commands.some((c: string) => c.includes("sample-hook"))).toBe(false);
 	});
 
 	it("should have removed ~/.oh-my-skills directory", () => {

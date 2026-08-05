@@ -90,13 +90,16 @@ main() {
     local user_shell
     user_shell=$(detect_shell)
 
-    init_steps 3
+    init_steps 4
 
     print_step "Removing skills..."
     remove_skills
 
     print_step "Cleaning shell config..."
     remove_sourcing "$user_shell"
+
+    print_step "Disabling hooks..."
+    disable_all_hooks
 
     print_step "Removing installation..."
     remove_installation
