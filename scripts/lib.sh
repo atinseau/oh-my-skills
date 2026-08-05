@@ -11,6 +11,7 @@ REGISTRY_FILE="$INSTALL_DIR/registry.json"
 SHELL_FILE="$INSTALL_DIR/shell"
 COMMANDS_DIR="$INSTALL_DIR/commands"
 HOOKS_DIR="$INSTALL_DIR/hooks"
+CLAUDE_SETTINGS_FILE="$HOME/.claude/settings.json"
 
 # Source of truth for the current release tag.
 # Note: each script also has a _OMS_BOOTSTRAP_TAG for the curl|bash case
@@ -280,6 +281,76 @@ registry_remove_enabled_hook() {
         return 1
     fi
     mv "$tmp" "$REGISTRY_FILE"
+}
+
+# Merge a hook entry into ~/.claude/settings.json (idempotent — replaces any
+# existing entry with the same command). Requires jq. Never touches entries
+# for OTHER commands, including hooks the user configured themselves.
+# Usage: settings_merge_hook <event> <matcher> <command> <timeout>
+settings_merge_hook() {
+    if ! command -v jq &> /dev/null; then
+        log_error "jq is required for settings_merge_hook"
+        return 1
+    fi
+    local event="$1" matcher="$2" command="$3" timeout="$4"
+
+    mkdir -p "$(dirname "$CLAUDE_SETTINGS_FILE")"
+    if [[ ! -f "$CLAUDE_SETTINGS_FILE" ]]; then
+        echo '{}' > "$CLAUDE_SETTINGS_FILE"
+    fi
+
+    if ! jq empty "$CLAUDE_SETTINGS_FILE" 2>/dev/null; then
+        log_error "$CLAUDE_SETTINGS_FILE contains invalid JSON — fix it manually before enabling hooks"
+        return 1
+    fi
+
+    local tmp
+    tmp=$(mktemp)
+    # NOTE: ".hooks" at the top level is the settings.json hooks map; the inner
+    # ".hooks" (inside each matcher-group object) is that group's own command
+    # list — same field name, two different levels of the schema.
+    if ! jq --arg event "$event" --arg matcher "$matcher" --arg cmd "$command" --argjson timeout "$timeout" '
+        .hooks[$event] = ((.hooks[$event] // [])
+            | map(select((.hooks // []) | any(.command == $cmd) | not))
+            + [{matcher: $matcher, hooks: [{type: "command", command: $cmd, timeout: $timeout}]}])
+    ' "$CLAUDE_SETTINGS_FILE" > "$tmp"; then
+        rm -f "$tmp"
+        log_error "Failed to update $CLAUDE_SETTINGS_FILE with jq"
+        return 1
+    fi
+    mv "$tmp" "$CLAUDE_SETTINGS_FILE"
+}
+
+# Remove any hook entry matching <command> under <event> from
+# ~/.claude/settings.json. Requires jq. Success no-op if the file is absent.
+# Usage: settings_remove_hook <event> <command>
+settings_remove_hook() {
+    if [[ ! -f "$CLAUDE_SETTINGS_FILE" ]]; then
+        return 0
+    fi
+    if ! command -v jq &> /dev/null; then
+        log_error "jq is required for settings_remove_hook"
+        return 1
+    fi
+    local event="$1" command="$2"
+
+    if ! jq empty "$CLAUDE_SETTINGS_FILE" 2>/dev/null; then
+        log_error "$CLAUDE_SETTINGS_FILE contains invalid JSON — fix it manually"
+        return 1
+    fi
+
+    local tmp
+    tmp=$(mktemp)
+    if ! jq --arg event "$event" --arg cmd "$command" '
+        if (.hooks[$event]? // null) == null then .
+        else .hooks[$event] = (.hooks[$event] | map(select((.hooks // []) | any(.command == $cmd) | not)))
+        end
+    ' "$CLAUDE_SETTINGS_FILE" > "$tmp"; then
+        rm -f "$tmp"
+        log_error "Failed to update $CLAUDE_SETTINGS_FILE with jq"
+        return 1
+    fi
+    mv "$tmp" "$CLAUDE_SETTINGS_FILE"
 }
 
 # Extract a YAML frontmatter field from a SKILL.md file

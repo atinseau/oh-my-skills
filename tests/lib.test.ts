@@ -505,6 +505,110 @@ describe("lib.sh unit tests", () => {
 		});
 	});
 
+	// ─── settings_merge_hook() / settings_remove_hook() ──────────────────────
+
+	describe("settings_merge_hook() / settings_remove_hook()", () => {
+		it("creates ~/.claude/settings.json when it doesn't exist", () => {
+			exec(id, `rm -rf ${HOME}/.claude/settings.json`);
+			lib(id, `settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`);
+			const r = exec(id, `test -f ${HOME}/.claude/settings.json && echo ok`);
+			expect(r.output).toBe("ok");
+		});
+
+		it("writes the expected hook entry shape", () => {
+			exec(id, `rm -f ${HOME}/.claude/settings.json`);
+			lib(id, `settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`);
+			const r = exec(id, `cat ${HOME}/.claude/settings.json`);
+			const settings = JSON.parse(r.output);
+			expect(settings.hooks.UserPromptSubmit).toEqual([
+				{
+					matcher: "*",
+					hooks: [{ type: "command", command: "/opt/hook.sh", timeout: 10 }],
+				},
+			]);
+		});
+
+		it("is idempotent — re-merging the same command doesn't duplicate it", () => {
+			exec(id, `rm -f ${HOME}/.claude/settings.json`);
+			lib(id, `settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`);
+			lib(id, `settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`);
+			const r = exec(id, `cat ${HOME}/.claude/settings.json`);
+			const settings = JSON.parse(r.output);
+			expect(settings.hooks.UserPromptSubmit.length).toBe(1);
+		});
+
+		it("preserves pre-existing unrelated hook entries for the same event", () => {
+			exec(
+				id,
+				`echo '{"hooks":{"UserPromptSubmit":[{"matcher":"*","hooks":[{"type":"command","command":"/my/own/script.sh","timeout":5}]}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			lib(id, `settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`);
+			const r = exec(id, `cat ${HOME}/.claude/settings.json`);
+			const settings = JSON.parse(r.output);
+			const commands = settings.hooks.UserPromptSubmit.flatMap((g: any) =>
+				g.hooks.map((h: any) => h.command),
+			);
+			expect(commands.sort()).toEqual(["/my/own/script.sh", "/opt/hook.sh"]);
+		});
+
+		it("preserves pre-existing entries for other events", () => {
+			exec(
+				id,
+				`echo '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"/other/script.sh"}]}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			lib(id, `settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`);
+			const r = exec(id, `cat ${HOME}/.claude/settings.json`);
+			const settings = JSON.parse(r.output);
+			expect(settings.hooks.PreToolUse[0].hooks[0].command).toBe(
+				"/other/script.sh",
+			);
+			expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
+				"/opt/hook.sh",
+			);
+		});
+
+		it("aborts without writing when existing settings.json has invalid JSON", () => {
+			exec(id, `printf 'not json{' > ${HOME}/.claude/settings.json`);
+			const r = lib(
+				id,
+				`settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`,
+			);
+			expect(r.exitCode).not.toBe(0);
+			const content = exec(id, `cat ${HOME}/.claude/settings.json`);
+			expect(content.output).toBe("not json{");
+		});
+
+		it("settings_remove_hook removes only the matching command", () => {
+			exec(id, `rm -f ${HOME}/.claude/settings.json`);
+			lib(id, `settings_merge_hook "UserPromptSubmit" "*" "/opt/hook.sh" 10`);
+			// NOTE: uses exec(), not lib() — lib() wraps cmd in an extra
+			// `bash -c '...'` layer, and this echo's own single-quoted JSON
+			// argument breaks that outer quoting (nested single quotes don't
+			// nest in shell). exec() matches every other JSON-seeding line in
+			// this file and round-trips the JSON correctly.
+			exec(
+				id,
+				`echo '{"hooks":{"UserPromptSubmit":[{"matcher":"*","hooks":[{"type":"command","command":"/opt/hook.sh","timeout":10}]},{"matcher":"*","hooks":[{"type":"command","command":"/my/own/script.sh"}]}]}}' > ${HOME}/.claude/settings.json`,
+			);
+			lib(id, `settings_remove_hook "UserPromptSubmit" "/opt/hook.sh"`);
+			const r = exec(id, `cat ${HOME}/.claude/settings.json`);
+			const settings = JSON.parse(r.output);
+			const commands = settings.hooks.UserPromptSubmit.flatMap((g: any) =>
+				g.hooks.map((h: any) => h.command),
+			);
+			expect(commands).toEqual(["/my/own/script.sh"]);
+		});
+
+		it("settings_remove_hook is a no-op success when settings.json doesn't exist", () => {
+			exec(id, `rm -f ${HOME}/.claude/settings.json`);
+			const r = lib(
+				id,
+				`settings_remove_hook "UserPromptSubmit" "/opt/hook.sh"`,
+			);
+			expect(r.exitCode).toBe(0);
+		});
+	});
+
 	// ─── install_commands() ───────────────────────────────────────────────────
 
 	describe("install_commands()", () => {
