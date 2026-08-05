@@ -274,6 +274,13 @@ describe("lib.sh unit tests", () => {
 			const registry = JSON.parse(r.output);
 			expect(registry.version).toBe(VERSION);
 		});
+
+		it("initializes registry.json with an empty hooks.enabled list", () => {
+			lib(id, `init_registry`);
+			const r = exec(id, `cat ${INSTALL}/registry.json`);
+			const registry = JSON.parse(r.output);
+			expect(registry.hooks.enabled).toEqual([]);
+		});
 	});
 
 	// ─── install_skills() ─────────────────────────────────────────────────────
@@ -377,6 +384,54 @@ describe("lib.sh unit tests", () => {
 			// Each skill should appear exactly once per LLM
 			const uniqueClaude = new Set(registry.skills.claude);
 			expect(uniqueClaude.size).toBe(registry.skills.claude.length);
+		});
+	});
+
+	// ─── hooks registry ───────────────────────────────────────────────────────
+
+	describe("hooks registry", () => {
+		it("registry_write_skills preserves an existing hooks.enabled list", () => {
+			lib(id, `init_registry`);
+			lib(id, `registry_add_enabled_hook "handoff"`);
+
+			// install_skills calls registry_write_skills internally, which used to
+			// overwrite the whole registry — this must NOT drop the hooks key.
+			exec(id, `rm -rf ${HOME}/.claude/skills`);
+			lib(id, `install_skills`);
+
+			const r = exec(id, `cat ${INSTALL}/registry.json`);
+			const registry = JSON.parse(r.output);
+			expect(registry.hooks.enabled).toEqual(["handoff"]);
+		});
+
+		it("registry_add_enabled_hook is idempotent", () => {
+			lib(id, `init_registry`);
+			lib(id, `registry_add_enabled_hook "handoff"`);
+			lib(id, `registry_add_enabled_hook "handoff"`);
+
+			const r = exec(id, `cat ${INSTALL}/registry.json`);
+			const registry = JSON.parse(r.output);
+			expect(registry.hooks.enabled).toEqual(["handoff"]);
+		});
+
+		it("registry_remove_enabled_hook removes only the named hook", () => {
+			lib(id, `init_registry`);
+			lib(id, `registry_add_enabled_hook "handoff"`);
+			lib(id, `registry_add_enabled_hook "other-hook"`);
+			lib(id, `registry_remove_enabled_hook "handoff"`);
+
+			const r = exec(id, `cat ${INSTALL}/registry.json`);
+			const registry = JSON.parse(r.output);
+			expect(registry.hooks.enabled).toEqual(["other-hook"]);
+		});
+
+		it("registry_read_enabled_hooks prints one name per line", () => {
+			lib(id, `init_registry`);
+			lib(id, `registry_add_enabled_hook "handoff"`);
+			lib(id, `registry_add_enabled_hook "other-hook"`);
+
+			const r = lib(id, `registry_read_enabled_hooks`);
+			expect(r.output.split("\n").sort()).toEqual(["handoff", "other-hook"]);
 		});
 	});
 

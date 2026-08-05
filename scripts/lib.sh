@@ -172,7 +172,7 @@ get_version() {
 init_registry() {
     local version
     version=$(get_version)
-    echo "{\"version\":\"$version\",\"skills\":{\"claude\":[],\"copilot\":[]}}" > "$REGISTRY_FILE"
+    echo "{\"version\":\"$version\",\"skills\":{\"claude\":[],\"copilot\":[]},\"hooks\":{\"enabled\":[]}}" > "$REGISTRY_FILE"
     log_success "Registry initialized (v$version)"
 }
 
@@ -206,8 +206,12 @@ registry_write_skills() {
         if [[ -n "$copilot_paths" ]]; then
             copilot_json=$(echo "$copilot_paths" | tr '|' '\n' | jq -R . | jq -s .)
         fi
-        jq -n --arg v "$version" --argjson c "$claude_json" --argjson p "$copilot_json" \
-            '{"version":$v,"skills":{"claude":$c,"copilot":$p}}' > "$REGISTRY_FILE"
+        local hooks_json='{"enabled":[]}'
+        if [[ -f "$REGISTRY_FILE" ]]; then
+            hooks_json=$(jq -c '.hooks // {"enabled":[]}' "$REGISTRY_FILE" 2>/dev/null || echo '{"enabled":[]}')
+        fi
+        jq -n --arg v "$version" --argjson c "$claude_json" --argjson p "$copilot_json" --argjson h "$hooks_json" \
+            '{"version":$v,"skills":{"claude":$c,"copilot":$p},"hooks":$h}' > "$REGISTRY_FILE"
     else
         # Without jq: build JSON manually
         local claude_arr=""
@@ -218,8 +222,48 @@ registry_write_skills() {
         if [[ -n "$copilot_paths" ]]; then
             copilot_arr=$(echo "$copilot_paths" | tr '|' '\n' | sed 's/.*/"&"/' | tr '\n' ',' | sed 's/,$//')
         fi
-        echo "{\"version\":\"$version\",\"skills\":{\"claude\":[${claude_arr}],\"copilot\":[${copilot_arr}]}}" > "$REGISTRY_FILE"
+        local hooks_field='"hooks":{"enabled":[]}'
+        if [[ -f "$REGISTRY_FILE" ]]; then
+            local existing_hooks
+            existing_hooks=$(grep -oE '"hooks"[[:space:]]*:[[:space:]]*\{[^}]*\}' "$REGISTRY_FILE" 2>/dev/null | head -1)
+            [[ -n "$existing_hooks" ]] && hooks_field="$existing_hooks"
+        fi
+        echo "{\"version\":\"$version\",\"skills\":{\"claude\":[${claude_arr}],\"copilot\":[${copilot_arr}]},${hooks_field}}" > "$REGISTRY_FILE"
     fi
+}
+
+# Read enabled hook names from the registry, one per line.
+# Usage: registry_read_enabled_hooks
+registry_read_enabled_hooks() {
+    if [[ ! -f "$REGISTRY_FILE" ]]; then
+        return 0
+    fi
+    if command -v jq &> /dev/null; then
+        jq -r '.hooks.enabled[]?' "$REGISTRY_FILE" 2>/dev/null
+    else
+        sed -n 's/.*"hooks"[[:space:]]*:[[:space:]]*{[[:space:]]*"enabled"[[:space:]]*:[[:space:]]*\[\(.*\)\][[:space:]]*}.*/\1/p' "$REGISTRY_FILE" 2>/dev/null \
+            | tr ',' '\n' | tr -d '"[:space:]' | grep -v '^$'
+    fi
+}
+
+# Add a hook name to the registry's enabled list (idempotent). Requires jq.
+# Usage: registry_add_enabled_hook "handoff"
+registry_add_enabled_hook() {
+    local name="$1"
+    local tmp
+    tmp=$(mktemp)
+    jq --arg n "$name" '.hooks.enabled = ((.hooks.enabled // []) + [$n] | unique)' "$REGISTRY_FILE" > "$tmp"
+    mv "$tmp" "$REGISTRY_FILE"
+}
+
+# Remove a hook name from the registry's enabled list. Requires jq.
+# Usage: registry_remove_enabled_hook "handoff"
+registry_remove_enabled_hook() {
+    local name="$1"
+    local tmp
+    tmp=$(mktemp)
+    jq --arg n "$name" '.hooks.enabled = ((.hooks.enabled // []) - [$n])' "$REGISTRY_FILE" > "$tmp"
+    mv "$tmp" "$REGISTRY_FILE"
 }
 
 # Extract a YAML frontmatter field from a SKILL.md file
