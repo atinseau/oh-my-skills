@@ -225,7 +225,7 @@ registry_write_skills() {
         local hooks_field='"hooks":{"enabled":[]}'
         if [[ -f "$REGISTRY_FILE" ]]; then
             local existing_hooks
-            existing_hooks=$(grep -oE '"hooks"[[:space:]]*:[[:space:]]*\{[^}]*\}' "$REGISTRY_FILE" 2>/dev/null | head -1)
+            existing_hooks=$(sed -n 's/.*\("hooks":{[^}]*}\).*/\1/p' "$REGISTRY_FILE" 2>/dev/null | head -1)
             [[ -n "$existing_hooks" ]] && hooks_field="$existing_hooks"
         fi
         echo "{\"version\":\"$version\",\"skills\":{\"claude\":[${claude_arr}],\"copilot\":[${copilot_arr}]},${hooks_field}}" > "$REGISTRY_FILE"
@@ -241,28 +241,44 @@ registry_read_enabled_hooks() {
     if command -v jq &> /dev/null; then
         jq -r '.hooks.enabled[]?' "$REGISTRY_FILE" 2>/dev/null
     else
-        sed -n 's/.*"hooks"[[:space:]]*:[[:space:]]*{[[:space:]]*"enabled"[[:space:]]*:[[:space:]]*\[\(.*\)\][[:space:]]*}.*/\1/p' "$REGISTRY_FILE" 2>/dev/null \
-            | tr ',' '\n' | tr -d '"[:space:]' | grep -v '^$'
+        sed -n 's/.*"enabled"[[:space:]]*:[[:space:]]*\[\(.*\)\].*/\1/p' "$REGISTRY_FILE" 2>/dev/null \
+            | tr ',' '\n' | tr -d '" ' | grep -v '^$'
     fi
 }
 
 # Add a hook name to the registry's enabled list (idempotent). Requires jq.
 # Usage: registry_add_enabled_hook "handoff"
 registry_add_enabled_hook() {
+    if ! command -v jq &> /dev/null; then
+        log_error "jq is required for registry_add_enabled_hook"
+        return 1
+    fi
     local name="$1"
     local tmp
     tmp=$(mktemp)
-    jq --arg n "$name" '.hooks.enabled = ((.hooks.enabled // []) + [$n] | unique)' "$REGISTRY_FILE" > "$tmp"
+    if ! jq -c --arg n "$name" '.hooks.enabled = ((.hooks.enabled // []) + [$n] | unique)' "$REGISTRY_FILE" > "$tmp"; then
+        rm -f "$tmp"
+        log_error "Failed to update registry with jq"
+        return 1
+    fi
     mv "$tmp" "$REGISTRY_FILE"
 }
 
 # Remove a hook name from the registry's enabled list. Requires jq.
 # Usage: registry_remove_enabled_hook "handoff"
 registry_remove_enabled_hook() {
+    if ! command -v jq &> /dev/null; then
+        log_error "jq is required for registry_remove_enabled_hook"
+        return 1
+    fi
     local name="$1"
     local tmp
     tmp=$(mktemp)
-    jq --arg n "$name" '.hooks.enabled = ((.hooks.enabled // []) - [$n])' "$REGISTRY_FILE" > "$tmp"
+    if ! jq -c --arg n "$name" '.hooks.enabled = ((.hooks.enabled // []) - [$n])' "$REGISTRY_FILE" > "$tmp"; then
+        rm -f "$tmp"
+        log_error "Failed to update registry with jq"
+        return 1
+    fi
     mv "$tmp" "$REGISTRY_FILE"
 }
 

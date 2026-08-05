@@ -433,6 +433,76 @@ describe("lib.sh unit tests", () => {
 			const r = lib(id, `registry_read_enabled_hooks`);
 			expect(r.output.split("\n").sort()).toEqual(["handoff", "other-hook"]);
 		});
+
+		it("registry_write_skills preserves hooks via non-jq fallback", () => {
+			lib(id, `init_registry`);
+			lib(id, `registry_add_enabled_hook "handoff"`);
+
+			// Hide jq to force non-jq code path
+			exec(id, `mv /usr/bin/jq /usr/bin/jq.bak`);
+			try {
+				exec(id, `rm -rf ${HOME}/.claude/skills`);
+				lib(id, `install_skills`);
+
+				const r = exec(id, `cat ${INSTALL}/registry.json`);
+				const registry = JSON.parse(r.output);
+				expect(registry.hooks.enabled).toEqual(["handoff"]);
+			} finally {
+				exec(id, `mv /usr/bin/jq.bak /usr/bin/jq`);
+			}
+		});
+
+		it("registry_read_enabled_hooks works via non-jq sed fallback", () => {
+			lib(id, `init_registry`);
+			lib(id, `registry_add_enabled_hook "handoff"`);
+			lib(id, `registry_add_enabled_hook "other-hook"`);
+
+			// Hide jq to force non-jq code path
+			exec(id, `mv /usr/bin/jq /usr/bin/jq.bak`);
+			try {
+				const r = lib(id, `registry_read_enabled_hooks`);
+				expect(r.output.split("\n").sort()).toEqual(["handoff", "other-hook"]);
+			} finally {
+				exec(id, `mv /usr/bin/jq.bak /usr/bin/jq`);
+			}
+		});
+
+		it("registry_add_enabled_hook fails safely when jq is absent", () => {
+			lib(id, `init_registry`);
+
+			// Hide jq
+			exec(id, `mv /usr/bin/jq /usr/bin/jq.bak`);
+			try {
+				const r = lib(id, `registry_add_enabled_hook "handoff"`);
+				expect(r.exitCode).not.toBe(0);
+				// Registry should still be intact
+				const reg = exec(id, `cat ${INSTALL}/registry.json`);
+				const registry = JSON.parse(reg.output);
+				expect(registry.version).toBeDefined();
+				expect(registry.skills).toBeDefined();
+				expect(registry.hooks).toBeDefined();
+			} finally {
+				exec(id, `mv /usr/bin/jq.bak /usr/bin/jq`);
+			}
+		});
+
+		it("registry_remove_enabled_hook fails safely when jq is absent", () => {
+			lib(id, `init_registry`);
+			lib(id, `registry_add_enabled_hook "handoff"`);
+
+			// Hide jq
+			exec(id, `mv /usr/bin/jq /usr/bin/jq.bak`);
+			try {
+				const r = lib(id, `registry_remove_enabled_hook "handoff"`);
+				expect(r.exitCode).not.toBe(0);
+				// Registry should still be intact with hooks preserved
+				const reg = exec(id, `cat ${INSTALL}/registry.json`);
+				const registry = JSON.parse(reg.output);
+				expect(registry.hooks.enabled).toEqual(["handoff"]);
+			} finally {
+				exec(id, `mv /usr/bin/jq.bak /usr/bin/jq`);
+			}
+		});
 	});
 
 	// ─── install_commands() ───────────────────────────────────────────────────
