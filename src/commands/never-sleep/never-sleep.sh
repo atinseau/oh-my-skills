@@ -22,12 +22,18 @@ Options:
   -h, --help              Show this help.
 
 Environment:
-  NEVER_SLEEP_POLL        Clamshell poll interval in seconds (default: 2).
+  NEVER_SLEEP_POLL          Clamshell poll interval in seconds (default: 2).
+  NEVER_SLEEP_SUDO_REFRESH  Sudo ticket refresh interval in seconds
+                            (default: 60) — keeps the auto-release from
+                            stalling on a password prompt.
 
 Alias: ns
 
+Concurrent sessions are safe: sleep is re-enabled only when the last one exits.
+
 Note: if the shell is killed with SIGKILL (kill -9, force-quit), the cleanup
-trap cannot run. Restore manually with: sudo pmset -a disablesleep 0
+trap cannot run and sleep stays disabled until the next never-sleep exits
+cleanly. To restore immediately: sudo pmset -a disablesleep 0
 EOF
 }
 
@@ -43,27 +49,101 @@ _ns_check_platform() {
 
 # Echoes the raw duration (e.g. "30s", "10m") as a number of seconds.
 # Returns 1 if the input is malformed.
+#
+# Deliberately built from parameter expansion instead of `[[ =~ ]]`: zsh only
+# populates BASH_REMATCH under `setopt BASH_REMATCH`, so the regex version
+# matched but handed back empty capture groups. The caller then saw an empty
+# duration, silently fell through to the unlimited branch, and `--duration 2h`
+# never expired — the exact opposite of what was asked for, with no error.
 _ns_parse_duration() {
     local input="$1"
-    if [[ "$input" =~ ^([0-9]+)([smh]?)$ ]]; then
-        local n="${BASH_REMATCH[1]}"
-        local unit="${BASH_REMATCH[2]}"
-        case "$unit" in
-            ""|s) echo "$n" ;;
-            m)    echo $((n * 60)) ;;
-            h)    echo $((n * 3600)) ;;
-        esac
-        return 0
-    fi
-    return 1
+    local n="${input%[smh]}"
+    local unit="${input#"$n"}"
+
+    # Reject anything that is not one-or-more digits followed by an optional
+    # unit (covers "", "abc", "2x", "2mm", "-5", "s").
+    case "$n" in
+        ""|*[!0-9]*) return 1 ;;
+    esac
+
+    case "$unit" in
+        ""|s) echo "$n" ;;
+        m)    echo $((n * 60)) ;;
+        h)    echo $((n * 3600)) ;;
+        *)    return 1 ;;
+    esac
 }
 
-# Echoes the current SleepDisabled value (0 or 1), defaulting to 0.
+# Sentinel directory: remembers the *real* pre-never-sleep value of
+# SleepDisabled, plus one marker file per live instance. It lives in TMPDIR so
+# it disappears on the same reboot that also resets `pmset disablesleep` —
+# the two states can never drift apart across boots.
+_ns_state_dir() {
+    local base="${TMPDIR:-/tmp}"
+    printf '%s/never-sleep.%s.d' "${base%/}" "$(id -u)"
+}
+
+# Echoes the SleepDisabled value to restore on exit (0 or 1, defaulting to 0).
+#
+# The live value read from pmset is only trustworthy on the very first run:
+# afterwards it reports *our own* 1 back to us. That matters because a run
+# killed with SIGKILL cannot run its cleanup and leaves SleepDisabled=1 behind
+# — so the next run would read 1, record it as "what the user wants", and
+# restore 1 on a clean Ctrl+C. One crash would pin the machine awake forever,
+# while cheerfully reporting the state as restored. Persisting the first read
+# and reusing it makes every later run converge back to the true value.
+#
 # Matches by key name so column shifts in pmset's output stay safe.
 _ns_initial_sleep_state() {
-    local s
+    local dir persisted s
+    dir=$(_ns_state_dir)
+
+    if persisted=$(cat "$dir/state" 2>/dev/null) \
+        && [[ "$persisted" == "0" || "$persisted" == "1" ]]; then
+        echo "$persisted"
+        return 0
+    fi
+
     s=$(pmset -g 2>/dev/null | awk '$1=="SleepDisabled" {print $NF; exit}')
-    echo "${s:-0}"
+    s="${s:-0}"
+    # Best-effort: an unwritable TMPDIR just degrades to the old read-live
+    # behaviour rather than blocking the user.
+    mkdir -p "$dir" 2>/dev/null && printf '%s\n' "$s" > "$dir/state" 2>/dev/null
+    echo "$s"
+}
+
+# Registers this instance as a live holder of the disabled-sleep state, keyed by
+# a pid `kill -0` can probe later. Without this, two concurrent never-sleep
+# sessions would fight: the first one to exit would re-enable sleep under the
+# second one's feet.
+_ns_claim() {
+    local dir
+    dir=$(_ns_state_dir)
+    mkdir -p "$dir" 2>/dev/null && : > "$dir/owner.$1" 2>/dev/null
+}
+
+# Drops this instance's claim, reaps claims whose process is gone (SIGKILLed
+# runs), and echoes how many *other* live instances still hold sleep disabled.
+# Uses `find` rather than a glob: an unmatched glob is an error in zsh, not an
+# empty loop.
+_ns_release() {
+    local dir owner pid alive=0
+    dir=$(_ns_state_dir)
+
+    if [[ -n "$1" ]]; then
+        rm -f "$dir/owner.$1" 2>/dev/null
+    fi
+
+    for owner in $(find "$dir" -maxdepth 1 -name 'owner.*' 2>/dev/null); do
+        pid="${owner##*/owner.}"
+        if kill -0 "$pid" 2>/dev/null; then
+            alive=$((alive + 1))
+        else
+            rm -f "$owner" 2>/dev/null
+        fi
+    done
+
+    echo "$alive"
 }
 
 _ns_print_banner() {
@@ -108,20 +188,69 @@ _ns_clamshell_watcher() {
     done
 }
 
+# Background loop keeping the sudo timestamp warm.
+#
+# The restore path ends in `sudo pmset -a disablesleep 0`. Sudo's ticket lasts
+# ~5 min, so on any session longer than that the restore would stop dead on a
+# password prompt. With --duration that prompt is fatal: nobody is watching, the
+# lid may be shut, and the machine stays awake forever instead of releasing at
+# the deadline. Refreshing every 60s keeps the final sudo non-interactive.
+#
+# `-n` so we never block on a prompt ourselves. If the ticket is gone anyway (or
+# sudo is configured not to cache), we stop refreshing rather than loop on a
+# failing command — the restore then prompts, which is the old behaviour.
+# Owns its in-flight `sleep` child, same contract as the clamshell watcher.
+_ns_sudo_keepalive() {
+    local interval="${NEVER_SLEEP_SUDO_REFRESH:-60}"
+    local sleep_pid=""
+
+    trap '[[ -n "$sleep_pid" ]] && kill "$sleep_pid" 2>/dev/null; exit 0' TERM INT
+
+    while :; do
+        sleep "$interval" &
+        sleep_pid=$!
+        wait "$sleep_pid" 2>/dev/null
+        sleep_pid=""
+        sudo -n -v 2>/dev/null || return 0
+    done
+}
+
 # EXIT trap body. Sends SIGTERM to the watcher (which self-cleans its own
 # in-flight `sleep` child via its own trap), then restores pmset only if we
 # actually changed it — avoids a bogus second sudo prompt when the initial
-# pmset call failed or was cancelled.
+# pmset call failed or was cancelled — and only if no other never-sleep session
+# is still relying on it.
 _ns_cleanup() {
     local watcher="$1"
     local initial="$2"
     local changed="$3"
+    local keepalive="$4"
 
     if [[ -n "$watcher" ]]; then
         kill -TERM "$watcher" 2>/dev/null
     fi
 
+    # Stop refreshing before we spend the ticket — it is warm by construction
+    # (last refresh under a minute ago), so the restore below stays silent.
+    if [[ -n "$keepalive" ]]; then
+        kill -TERM "$keepalive" 2>/dev/null
+    fi
+
+    local others
+    others=$(_ns_release "$watcher")
+
     if [[ "$changed" != "1" ]]; then
+        # Nothing of ours to undo. Drop the sentinel as well if nobody else
+        # holds it, so a cancelled sudo prompt leaves no state behind.
+        if [[ "$others" == "0" ]]; then
+            rm -rf "$(_ns_state_dir)" 2>/dev/null
+        fi
+        return 0
+    fi
+
+    if [[ "$others" != "0" ]]; then
+        echo ""
+        echo "ℹ️  Sleep stays disabled: $others other never-sleep session(s) still running."
         return 0
     fi
 
@@ -129,6 +258,7 @@ _ns_cleanup() {
     echo "🔓 Restoring previous sleep mode..."
     sudo pmset -a disablesleep "$initial"
     echo "✅ Sleep mode restored (SleepDisabled=$initial)."
+    rm -rf "$(_ns_state_dir)" 2>/dev/null
 }
 
 # ---------------------------------------------------------------------------
@@ -181,7 +311,7 @@ never-sleep() {
     # shells). Inside we have two critical sections that MUST stay atomic with
     # respect to asynchronous signals:
     #   a) `sudo pmset` success ↔ `changed=1`
-    #   b) background-start watcher ↔ `watcher_pid=$!` capture
+    #   b) background-start watcher/keepalive ↔ pid capture ↔ `_ns_claim`
     # We ignore INT/TERM during each to close the race windows entirely — a
     # signal arriving inside is simply held until we restore the trap, at
     # which point the EXIT trap fires with consistent state.
@@ -194,8 +324,9 @@ never-sleep() {
     # the EXIT trap reliably in both bash and zsh.
     (
         local watcher_pid=""
+        local keepalive_pid=""
         local changed=0
-        trap '_ns_cleanup "$watcher_pid" "$initial_state" "$changed"' EXIT
+        trap '_ns_cleanup "$watcher_pid" "$initial_state" "$changed" "$keepalive_pid"' EXIT
 
         trap '' INT TERM
         if ! sudo pmset -a disablesleep 1; then
@@ -211,6 +342,9 @@ never-sleep() {
         trap '' INT TERM
         _ns_clamshell_watcher "$poll_interval" &
         watcher_pid=$!
+        _ns_claim "$watcher_pid"
+        _ns_sudo_keepalive &
+        keepalive_pid=$!
         trap 'exit 130' INT TERM
 
         if [[ -n "$seconds" ]]; then
