@@ -28,6 +28,11 @@ describe("never-sleep command", () => {
 			`cat > /fakebin/sudo <<'EOF'
 #!/bin/bash
 echo "sudo $*" >> /tmp/calls.log
+# Ticket refresh (\`sudo -n -v\`) is not a command to run: answer it directly.
+# $SUDO_V_EXIT simulates an expired/uncacheable ticket.
+if [ "$1" = "-n" ] || [ "$1" = "-v" ]; then
+    exit \${SUDO_V_EXIT:-0}
+fi
 exec "$@"
 EOF`,
 		);
@@ -71,7 +76,7 @@ EOF`,
 	});
 
 	const sourceCmd = `shopt -s expand_aliases; source /commands/never-sleep/never-sleep.sh`;
-	const runEnv = `export PATH=/fakebin:$PATH; : > /tmp/calls.log;`;
+	const runEnv = `export PATH=/fakebin:$PATH; : > /tmp/calls.log; rm -rf /tmp/never-sleep.*.d;`;
 
 	// Rewrite the caffeinate mock between tests: "quick" returns immediately,
 	// "blocking" stays alive until killed (via `exec sleep`).
@@ -149,6 +154,167 @@ EOF`,
 		expect(calls.output).not.toMatch(/disablesleep 0/);
 	});
 
+	// --- Sentinel: surviving a SIGKILLed run without pinning the machine awake
+	//
+	// The live SleepDisabled value is only meaningful before we touch it. A run
+	// killed with SIGKILL leaves 1 behind; without a sentinel the next run would
+	// capture that 1 as "the user's setting" and restore it on a clean exit,
+	// permanently disabling sleep while claiming the opposite.
+	const stateDir = "/tmp/never-sleep.$(id -u).d";
+	// Same as runEnv but preserves a sentinel planted by the test.
+	const runEnvKeepState = `export PATH=/fakebin:$PATH; : > /tmp/calls.log;`;
+
+	it("should clear the sentinel once sleep has been restored", () => {
+		exec(
+			id,
+			`bash -c '${runEnv} export PMSET_INITIAL_STATE=1; ${sourceCmd}; never-sleep' >/dev/null 2>&1`,
+		);
+		// Left behind, it would be read back as the truth by the next run.
+		const after = exec(
+			id,
+			`test -d ${stateDir} && echo PRESENT || echo ABSENT`,
+		);
+		expect(after.output).toBe("ABSENT");
+	});
+
+	it("should restore 0 when the live value is a leftover from a SIGKILLed run", () => {
+		// Previous run captured the true value (0) then died without cleanup,
+		// leaving the machine at SleepDisabled=1.
+		exec(id, `rm -rf /tmp/never-sleep.*.d; mkdir -p ${stateDir}`);
+		exec(id, `echo 0 > ${stateDir}/state`);
+
+		const result = exec(
+			id,
+			`bash -c '${runEnvKeepState} export PMSET_INITIAL_STATE=1; ${sourceCmd}; never-sleep'`,
+		);
+		expect(result.exitCode).toBe(0);
+
+		const calls = exec(id, "cat /tmp/calls.log");
+		// Restores 0 — the sentinel, not the contaminated live read.
+		expect(calls.output).toMatch(
+			/pmset -a disablesleep 1[\s\S]*caffeinate -s[\s\S]*pmset -a disablesleep 0/,
+		);
+		expect(result.output).toContain("SleepDisabled=0");
+	});
+
+	it("should reuse a sentinel of 1 (user really did disable sleep themselves)", () => {
+		exec(id, `rm -rf /tmp/never-sleep.*.d; mkdir -p ${stateDir}`);
+		exec(id, `echo 1 > ${stateDir}/state`);
+
+		const result = exec(
+			id,
+			`bash -c '${runEnvKeepState} export PMSET_INITIAL_STATE=0; ${sourceCmd}; never-sleep'`,
+		);
+		expect(result.exitCode).toBe(0);
+		expect(result.output).toContain("SleepDisabled=1");
+
+		const calls = exec(id, "cat /tmp/calls.log");
+		expect(calls.output).not.toMatch(/disablesleep 0/);
+	});
+
+	it("should ignore a corrupted sentinel and fall back to the live value", () => {
+		exec(id, `rm -rf /tmp/never-sleep.*.d; mkdir -p ${stateDir}`);
+		exec(id, `echo garbage > ${stateDir}/state`);
+
+		const result = exec(
+			id,
+			`bash -c '${runEnvKeepState} export PMSET_INITIAL_STATE=0; ${sourceCmd}; never-sleep'`,
+		);
+		expect(result.exitCode).toBe(0);
+		expect(result.output).toContain("SleepDisabled=0");
+	});
+
+	it("should still work when the sentinel directory cannot be written", () => {
+		// Unwritable TMPDIR degrades to the old read-live behaviour instead of
+		// blocking the user.
+		exec(
+			id,
+			"rm -rf /tmp/ro-tmp && mkdir -p /tmp/ro-tmp && chmod 500 /tmp/ro-tmp",
+		);
+		const result = exec(
+			id,
+			`bash -c '${runEnvKeepState} export TMPDIR=/tmp/ro-tmp; export PMSET_INITIAL_STATE=0; ${sourceCmd}; never-sleep 2>&1'`,
+		);
+		expect(result.output).toContain("SleepDisabled=0");
+
+		const calls = exec(id, "cat /tmp/calls.log");
+		expect(calls.output).toMatch(
+			/pmset -a disablesleep 1[\s\S]*caffeinate -s[\s\S]*pmset -a disablesleep 0/,
+		);
+		exec(id, "chmod 700 /tmp/ro-tmp && rm -rf /tmp/ro-tmp");
+	});
+
+	// --- Concurrency: last one out re-enables sleep
+
+	it("should NOT re-enable sleep while another session is still running", () => {
+		exec(id, `rm -rf /tmp/never-sleep.*.d; mkdir -p ${stateDir}`);
+		exec(id, `echo 0 > ${stateDir}/state`);
+		// A live process standing in for a concurrent never-sleep instance.
+		exec(id, `sh -c 'sleep 30 >/dev/null 2>&1 & echo $! > /tmp/other.pid' `);
+		exec(id, `touch ${stateDir}/owner.$(cat /tmp/other.pid)`);
+
+		const result = exec(
+			id,
+			`bash -c '${runEnvKeepState} export PMSET_INITIAL_STATE=1; ${sourceCmd}; never-sleep'`,
+		);
+		expect(result.exitCode).toBe(0);
+		expect(result.output).toContain(
+			"other never-sleep session(s) still running",
+		);
+
+		const calls = exec(id, "cat /tmp/calls.log");
+		// Sleep must stay disabled: no restore call at all.
+		expect(calls.output).not.toMatch(/disablesleep 0/);
+		// And the sentinel survives for the session still holding it.
+		const dir = exec(id, `test -f ${stateDir}/state && echo KEPT || echo GONE`);
+		expect(dir.output).toBe("KEPT");
+
+		exec(id, "kill $(cat /tmp/other.pid) 2>/dev/null; rm -f /tmp/other.pid");
+	});
+
+	it("should reap claims from dead sessions and restore normally", () => {
+		exec(id, `rm -rf /tmp/never-sleep.*.d; mkdir -p ${stateDir}`);
+		exec(id, `echo 0 > ${stateDir}/state`);
+		// PID 999999 is well above any live pid in the container.
+		exec(id, `touch ${stateDir}/owner.999999`);
+
+		const result = exec(
+			id,
+			`bash -c '${runEnvKeepState} export PMSET_INITIAL_STATE=1; ${sourceCmd}; never-sleep'`,
+		);
+		expect(result.exitCode).toBe(0);
+		expect(result.output).toContain("SleepDisabled=0");
+
+		const after = exec(
+			id,
+			`test -d ${stateDir} && echo PRESENT || echo ABSENT`,
+		);
+		expect(after.output).toBe("ABSENT");
+	});
+
+	it("should register a live claim while running", () => {
+		// Blocking caffeinate keeps the instance alive so the claim is
+		// observable from outside.
+		setCaffeinate("blocking");
+		exec(id, `rm -rf /tmp/never-sleep.*.d`);
+		exec(
+			id,
+			`bash -c 'export PATH=/fakebin:$PATH; export PMSET_INITIAL_STATE=0; ${sourceCmd}; never-sleep' >/dev/null 2>&1 &
+for i in $(seq 1 50); do [ -f /tmp/caffeinate.pid ] && break; sleep 0.05; done
+sleep 0.2
+find ${stateDir} -name 'owner.*' > /tmp/claims.txt 2>/dev/null
+cat ${stateDir}/state > /tmp/live-state.txt 2>/dev/null
+kill "$(cat /tmp/caffeinate.pid)" 2>/dev/null
+wait 2>/dev/null`,
+		);
+		const claims = exec(id, "cat /tmp/claims.txt");
+		expect(claims.output).toContain("owner.");
+		// The sentinel holds the true pre-run value while the session is live.
+		const live = exec(id, "cat /tmp/live-state.txt");
+		expect(live.output).toBe("0");
+		setCaffeinate("quick");
+	}, 20_000);
+
 	it("should fail and not run caffeinate if pmset fails", () => {
 		const result = exec(
 			id,
@@ -193,7 +359,7 @@ EOF`,
 			`cat > /tmp/kill-driver.sh <<'DRIVER'
 #!/bin/bash
 export PATH=/fakebin:$PATH
-: > /tmp/calls.log
+: > /tmp/calls.log; rm -rf /tmp/never-sleep.*.d
 export PMSET_INITIAL_STATE=1
 bash -c '
   shopt -s expand_aliases
@@ -242,7 +408,7 @@ DRIVER`,
 			`cat > /tmp/interactive-driver.sh <<'DRIVER'
 #!/bin/bash
 export PATH=/fakebin:$PATH
-: > /tmp/calls.log
+: > /tmp/calls.log; rm -rf /tmp/never-sleep.*.d
 export PMSET_INITIAL_STATE=1
 
 # A background killer that simulates Ctrl+C once caffeinate is running
@@ -295,7 +461,7 @@ DRIVER`,
 			`cat > /tmp/zsh-ctrlc-driver.sh <<'DRIVER'
 #!/bin/bash
 export PATH=/fakebin:$PATH
-: > /tmp/calls.log
+: > /tmp/calls.log; rm -rf /tmp/never-sleep.*.d
 export PMSET_INITIAL_STATE=0
 
 # set -m makes the backgrounded shell its own process-group leader, so a
@@ -367,6 +533,133 @@ DRIVER`,
 		expect(calls.output).toContain("caffeinate -s -t 3600");
 	});
 
+	// --- Duration under zsh (BASH_REMATCH regression)
+	//
+	// zsh only fills BASH_REMATCH under `setopt BASH_REMATCH`, so a regex-based
+	// parser matched but handed back empty capture groups. --duration then
+	// degraded to unlimited — silently, in the shell most macOS users run.
+	// No glob in the reset here: an unmatched glob is a hard error in zsh.
+	const zshSource = "source /commands/never-sleep/never-sleep.sh";
+	const runEnvZsh = `export PATH=/fakebin:$PATH; : > /tmp/calls.log; rm -rf /tmp/never-sleep.$(id -u).d;`;
+
+	it("should honour --duration under zsh instead of falling back to unlimited", () => {
+		const result = exec(
+			id,
+			`zsh -c '${runEnvZsh} ${zshSource}; never-sleep -d 2m'`,
+		);
+		expect(result.exitCode).toBe(0);
+		// The banner is the user-visible half of the same bug.
+		expect(result.output).toContain("Running for 120s");
+
+		const calls = exec(id, "cat /tmp/calls.log");
+		expect(calls.output).toContain("caffeinate -s -t 120");
+		// Never the unlimited branch.
+		expect(calls.output).not.toMatch(/^caffeinate -s$/m);
+	});
+
+	it("should parse every duration unit identically in bash and zsh", () => {
+		for (const [input, seconds] of [
+			["45", "45"],
+			["45s", "45"],
+			["3m", "180"],
+			["2h", "7200"],
+		]) {
+			const bash = exec(
+				id,
+				`bash -c '${runEnv} ${sourceCmd}; never-sleep -d ${input}' >/dev/null 2>&1; cat /tmp/calls.log | grep caffeinate`,
+			);
+			const zsh = exec(
+				id,
+				`zsh -c '${runEnvZsh} ${zshSource}; never-sleep -d ${input}' >/dev/null 2>&1; cat /tmp/calls.log | grep caffeinate`,
+			);
+			expect(bash.output).toBe(`caffeinate -s -t ${seconds}`);
+			expect(zsh.output).toBe(`caffeinate -s -t ${seconds}`);
+		}
+	}, 20_000);
+
+	it("should reject malformed durations identically in bash and zsh", () => {
+		// "-5" is not here: it looks like a flag, so the arg parser rejects it
+		// earlier with "requires a value" — a different, already-tested path.
+		for (const bad of ["wat", "2x", "2mm", "s", "10M"]) {
+			const zsh = exec(
+				id,
+				`zsh -c '${runEnvZsh} ${zshSource}; never-sleep -d ${bad} 2>&1; echo EXIT=$?'`,
+			);
+			expect(zsh.output).toContain("Invalid duration");
+			expect(zsh.output).toContain("EXIT=1");
+		}
+	}, 20_000);
+
+	// --- Sudo ticket keepalive
+	//
+	// The restore ends in `sudo pmset`. Sudo's ticket lasts ~5 min, so an
+	// unattended --duration release would stall on a password prompt with the
+	// lid shut and leave the Mac awake past its deadline.
+
+	it("should keep the sudo ticket warm while running", () => {
+		setCaffeinate("blocking");
+		exec(id, "rm -rf /tmp/never-sleep.*.d");
+		exec(
+			id,
+			`bash -c 'export PATH=/fakebin:$PATH; : > /tmp/calls.log; export PMSET_INITIAL_STATE=0; export NEVER_SLEEP_SUDO_REFRESH=0.1; ${sourceCmd}; never-sleep' >/dev/null 2>&1 &
+for i in $(seq 1 50); do [ -f /tmp/caffeinate.pid ] && break; sleep 0.05; done
+sleep 0.6
+cp /tmp/calls.log /tmp/calls-during.log
+kill "$(cat /tmp/caffeinate.pid)" 2>/dev/null
+wait 2>/dev/null`,
+		);
+		const during = exec(id, "cat /tmp/calls-during.log");
+		const refreshes = during.output
+			.split("\n")
+			.filter((l) => l.trim() === "sudo -n -v").length;
+		expect(refreshes).toBeGreaterThanOrEqual(2);
+		setCaffeinate("quick");
+	}, 20_000);
+
+	it("should stop refreshing once the session is over (no orphan keepalive)", () => {
+		setCaffeinate("blocking");
+		exec(id, "rm -rf /tmp/never-sleep.*.d");
+		exec(
+			id,
+			`bash -c 'export PATH=/fakebin:$PATH; : > /tmp/calls.log; export PMSET_INITIAL_STATE=0; export NEVER_SLEEP_SUDO_REFRESH=0.1; ${sourceCmd}; never-sleep' >/dev/null 2>&1 &
+for i in $(seq 1 50); do [ -f /tmp/caffeinate.pid ] && break; sleep 0.05; done
+sleep 0.3
+kill "$(cat /tmp/caffeinate.pid)" 2>/dev/null
+wait 2>/dev/null
+sleep 0.3
+grep -c '^sudo -n -v$' /tmp/calls.log > /tmp/count-a.txt
+sleep 0.5
+grep -c '^sudo -n -v$' /tmp/calls.log > /tmp/count-b.txt`,
+		);
+		const a = exec(id, "cat /tmp/count-a.txt").output;
+		const b = exec(id, "cat /tmp/count-b.txt").output;
+		// Count frozen after exit: the background loop is gone, not orphaned.
+		expect(b).toBe(a);
+		setCaffeinate("quick");
+	}, 20_000);
+
+	it("should give up refreshing (not spin) when the ticket cannot be renewed", () => {
+		setCaffeinate("blocking");
+		exec(id, "rm -rf /tmp/never-sleep.*.d");
+		exec(
+			id,
+			`bash -c 'export PATH=/fakebin:$PATH; : > /tmp/calls.log; export PMSET_INITIAL_STATE=0; export SUDO_V_EXIT=1; export NEVER_SLEEP_SUDO_REFRESH=0.1; ${sourceCmd}; never-sleep' >/dev/null 2>&1 &
+for i in $(seq 1 50); do [ -f /tmp/caffeinate.pid ] && break; sleep 0.05; done
+sleep 0.6
+kill "$(cat /tmp/caffeinate.pid)" 2>/dev/null
+wait 2>/dev/null`,
+		);
+		const calls = exec(id, "cat /tmp/calls.log");
+		const refreshes = calls.output
+			.split("\n")
+			.filter((l) => l.trim() === "sudo -n -v").length;
+		// One failed attempt, then it stands down instead of hammering sudo.
+		expect(refreshes).toBe(1);
+		// And the restore still happens — degraded, not broken.
+		expect(calls.output).toMatch(/pmset -a disablesleep 0/);
+		setCaffeinate("quick");
+	}, 20_000);
+
 	it("should reject an invalid duration", () => {
 		const result = exec(
 			id,
@@ -408,7 +701,7 @@ DRIVER`,
 #!/bin/bash
 export PATH=/fakebin:$PATH
 export NEVER_SLEEP_POLL=0.1
-: > /tmp/calls.log
+: > /tmp/calls.log; rm -rf /tmp/never-sleep.*.d
 bash -c '
   shopt -s expand_aliases
   source /commands/never-sleep/never-sleep.sh
@@ -450,7 +743,7 @@ DRIVER`,
 #!/bin/bash
 export PATH=/fakebin:$PATH
 export NEVER_SLEEP_POLL=0.1
-: > /tmp/calls.log
+: > /tmp/calls.log; rm -rf /tmp/never-sleep.*.d
 bash -c '
   shopt -s expand_aliases
   source /commands/never-sleep/never-sleep.sh
@@ -491,7 +784,7 @@ DRIVER`,
 #!/bin/bash
 export PATH=/fakebin:$PATH
 export NEVER_SLEEP_POLL=0.1
-: > /tmp/calls.log
+: > /tmp/calls.log; rm -rf /tmp/never-sleep.*.d
 bash -c '
   shopt -s expand_aliases
   source /commands/never-sleep/never-sleep.sh
@@ -557,7 +850,7 @@ command -v pkill >/dev/null 2>&1 && {
   ln -sf /bin/false /tmp/no-pkill-shadow/pkill
   export PATH=/tmp/no-pkill-shadow:$PATH
 }
-: > /tmp/calls.log
+: > /tmp/calls.log; rm -rf /tmp/never-sleep.*.d
 export NEVER_SLEEP_POLL=0.1
 export PMSET_INITIAL_STATE=0
 bash -c '

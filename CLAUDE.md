@@ -107,6 +107,7 @@ src/commands/my-cmd/
 - Only `*.sh` files are copied at install — non-shell files (tests, README) stay in repo
 - Use nested layout when a command has tests
 - Commands define shell aliases/functions sourced via `~/.oh-my-skills/shell`
+- Commands are sourced into the **user's** shell, which is usually zsh — write bash/zsh-portable code and test both. Bash-only constructs can fail silently rather than error: `BASH_REMATCH` is empty in zsh unless `setopt BASH_REMATCH`, and an unmatched glob aborts the command in zsh instead of expanding to itself
 
 ## Contributing: Writing a Hook
 
