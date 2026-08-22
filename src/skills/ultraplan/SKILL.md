@@ -14,12 +14,12 @@ Decline the fan-out when any of these holds:
 
 1. the harness cannot run workers concurrently, **or** cannot point each at its own directory — asked in the **single** question batch of the run, together with the ambiguity-triage questions and the reachable model tiers. A second batch exists only for a question that reconnaissance surfaces and the codebase cannot answer
 2. the work is one dependency chain: a migration sequence, an API change rippling through its callers, a delicate refactor
-3. a handful of files in one area of the codebase
+3. the work is too small to amortise a fan-out: the sequential baseline, sized per requirement before decomposing, is below **~11** effort (S = 2, M = 3, L = 5), or fewer than **3** write-sets could run at once without needing each other's behavior. "One area of the codebase" is a collision hint (shared registries, barrels), not a criterion
 4. ambiguity that cannot be resolved now (user unavailable, or genuinely open)
 5. no test suite worth the name
 6. the user is token-constrained rather than time-constrained
 
-Judge 2 and 3 from the spec and a glance at the files it names — not a full reconnaissance — and revisit them after reconnaissance if the plan goes ahead. On a decline, hand over a **sequential plan**: numbered requirements with inferred ones marked · steps in dependency order, each with the files it touches and the command that proves it · interfaces worth deciding up front, stated inline · one sentence naming the criterion that triggered. No branch, no worktree, no `plan.json`. The speedup check at the end of compilation is a backstop, not this decision.
+Judge 2 and 3 from the requirement list and a glance at the files the spec names — not a full reconnaissance — and revisit them after reconnaissance if the plan goes ahead. Below ~11 no width clears 1.5×: wave 0a (2) + the longest unit (≥2) + wiring (≥2) + three gated batches (≥1.2) already cost ~7. On a decline, hand over a **sequential plan**: numbered requirements with inferred ones marked · steps in dependency order, each with the files it touches and the command that proves it · interfaces worth deciding up front, stated inline · one sentence naming the criterion that triggered. No branch, no worktree, no `plan.json`. The speedup check at the end of compilation is a backstop, not this decision. If the user disputes the criterion, compile in full and report the honest number, even below 1.
 
 ## Modes
 
@@ -78,6 +78,7 @@ Ask; do not introspect. Answerable: "can you run several agents at once, each in
 |---|---|
 | compile first, the shape test can wait | step 0 is the decision; the metric is a backstop |
 | split finer so the ratio clears 1.5 | one-unit-per-file; a chain is the honest answer — decline |
+| small feature, but it cuts into 3 neat units | below ~11 effort the floor (~7) eats the gain; decline |
 | sum the units for the baseline | baseline from the requirement list, before the cut |
 | typecheck passed, skip the smoke test | a typecheck opens no connection; two worktrees, one real test each |
 | copy `.env` into every worktree | six suites truncate one database; per-worktree db/port/cache or no shared wave |

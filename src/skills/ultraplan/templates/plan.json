@@ -31,16 +31,24 @@
 			"split",
 			"reopened"
 		],
-		"sizeScale": { "S": 2, "M": 3, "L": 5 },
-		"note": "No verdict is null in a finished run: held/dropped lineage → 'not satisfied — blocked by U-xx'; a unit that never merged → 'not reviewed' with what happened as evidence. 'running' is written at launch. A split yields U-xxa/U-xxb replacing the original in requirements[].units."
+		"sizeScale": {
+			"S": 2,
+			"M": 3,
+			"L": 5
+		},
+		"note": "No verdict is null in a finished run: held/dropped lineage \u2192 'not satisfied \u2014 blocked by U-xx'; a unit that never merged \u2192 'not reviewed' with what happened as evidence. 'running' is written at launch. A split yields U-xxa/U-xxb replacing the original in requirements[].units."
 	},
 	"harness": {
 		"parallelWorkers": true,
 		"concurrencyCap": 4,
-		"capSource": "assumed — user could not state one",
+		"capSource": "assumed \u2014 user could not state one",
 		"isolatedWorktrees": true,
 		"modelRouting": "available",
-		"tiers": { "cheap": null, "mid": null, "strong": null }
+		"tiers": {
+			"cheap": null,
+			"mid": null,
+			"strong": null
+		}
 	},
 	"integration": {
 		"repoPath": "/absolute/path/to/repo",
@@ -53,16 +61,21 @@
 		"note": "created at execute time only; absolute paths recorded so a resumed session reconstructs them"
 	},
 	"metrics": {
-		"sequentialBaseline": 17,
+		"sequentialBaseline": 8,
+		"baselineBreakdown": {
+			"R-02": "M",
+			"R-05": "S",
+			"shared: migration + wiring + docs": "M"
+		},
 		"units": 6,
 		"waves": 3,
 		"criticalPathEffort": 8,
 		"capAdjustment": 0,
 		"orchestratorLane": 1,
-		"projectedSpeedup": 1.9,
+		"projectedSpeedup": 0.9,
 		"tokenMultipleVsSequential": "~3x at balanced",
-		"worthFanningOut": true,
-		"note": "baseline from the requirement list BEFORE decomposition, never summed from units; lane = batches × ~0.4, more at max"
+		"worthFanningOut": false,
+		"note": "baseline = sum of baselineBreakdown on the S=2/M=3/L=5 scale, sized per requirement BEFORE decomposition, never from units; lane = batches \u00d7 ~0.4, more at max"
 	},
 	"decisions": [
 		{
@@ -89,7 +102,10 @@
 				"rearms": false,
 				"status": "pending",
 				"merged": false,
-				"baseline": { "path": null, "branch": "o/<slug>/R-02-baseline" }
+				"baseline": {
+					"path": null,
+					"branch": "o/<slug>/R-02-baseline"
+				}
 			},
 			"baselineVerdict": null,
 			"verdict": null,
@@ -146,7 +162,10 @@
 			"worktree": "<worktreeRoot>/integration",
 			"status": "pending",
 			"mergedAt": null,
-			"review": { "verdict": null, "evidence": null },
+			"review": {
+				"verdict": null,
+				"evidence": null
+			},
 			"deviations": []
 		},
 		{
@@ -186,7 +205,10 @@
 			"worktree": "<worktreeRoot>/U-02",
 			"status": "pending",
 			"mergedAt": null,
-			"review": { "verdict": null, "evidence": null },
+			"review": {
+				"verdict": null,
+				"evidence": null
+			},
 			"deviations": []
 		}
 	],

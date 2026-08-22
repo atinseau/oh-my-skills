@@ -42,6 +42,10 @@ check "testable oracles declare a resource-set and a branch" \
   '.requirements[] | select(.oracle.testable) | select((.oracle.uses|type)!="array" or ((.oracle.branch // "")=="")) | .id'
 check "gate table has wave-0a, smoke test, per-batch and final rows" \
   '[.gates[].after] as $g | ["wave-0a","wave-0a, before the first fan-out","every-merge-batch","final"] | .[] | select(($g|index(.))==null) | "missing gate: \(.)"'
+check "baseline breakdown recorded" \
+  '.vocabulary.sizeScale as $sc | .metrics | select(.baselineBreakdown==null) | "no baselineBreakdown"'
+check "baseline sum matches breakdown" \
+  '.vocabulary.sizeScale as $sc | .metrics | select(.baselineBreakdown!=null) | ([.baselineBreakdown[] | $sc[.]] | add) as $sum | select($sum != .sequentialBaseline) | "breakdown sums to \($sum), sequentialBaseline is \(.sequentialBaseline)"'
 check "baseline estimated (non-zero) and speedup reported" \
   '.metrics | select((.sequentialBaseline // 0)==0 or (.projectedSpeedup // 0)==0) | "metrics incomplete"'
 

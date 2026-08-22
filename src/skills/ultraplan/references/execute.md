@@ -33,7 +33,7 @@ cp "$REPO/.oms/plans/<slug>/"* "$WT/integration/.oms/plans/<slug>/"
 git -C "$WT/integration" add -f .oms/plans/<slug> && git -C "$WT/integration" commit -m "<slug>: plan"
 ```
 
-`-f`: `.oms/` is often gitignored. From here the committed copy is the state of record; the user's copy is stale — say so at handover. Everything below runs with `git -C "$WT/integration"`.
+`-f`: `.oms/` is often gitignored. Materialise the ignored files from preflight into the integration worktree as well, with their own DB name / ports — the gates run here. From here the committed copy is the state of record; the user's copy is stale — say so at handover. Everything below runs with `git -C "$WT/integration"`.
 
 ### Resume
 
@@ -128,6 +128,7 @@ git -C "$WT/integration" add -f .oms/plans/<slug> && git -C "$WT/integration" co
 
 - [ ] Gate: the profile's check + oracles now due. One gate per batch.
 - [ ] Reviews the merges unlocked: units per profile, requirements whose last covering unit landed. `contradicts-spec` → user now, dependents held.
+- [ ] Write every field the batch changed before committing: `units[].status`, `units[].review`, `units[].deviations`, `requirements[].verdict` + `evidence`, `requirements[].oracle.merged` / `.status`, and `baselineVerdict` when a baseline ran.
 - [ ] `plan.json` committed = the handoff if the session ends.
 
 ## Failures
