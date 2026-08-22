@@ -1,0 +1,213 @@
+{
+	"version": "2",
+	"slug": "2026-08-22-orders-csv-export",
+	"createdAt": "YYYY-MM-DDTHH:mm:ssZ",
+	"mode": "forge",
+	"profile": "balanced",
+	"sources": ["docs/specs/orders-export.md"],
+	"vocabulary": {
+		"requirementVerdict": [
+			"satisfied",
+			"partial",
+			"not satisfied",
+			"contradicts-spec",
+			"out-of-bounds"
+		],
+		"unitVerdict": [
+			"satisfied",
+			"partial",
+			"not satisfied",
+			"contradicts-spec",
+			"out-of-bounds",
+			"not reviewed"
+		],
+		"unitStatus": [
+			"pending",
+			"running",
+			"merged",
+			"failed",
+			"held",
+			"dropped",
+			"split",
+			"reopened"
+		],
+		"sizeScale": { "S": 2, "M": 3, "L": 5 },
+		"note": "No verdict is null in a finished run: held/dropped lineage → 'not satisfied — blocked by U-xx'; a unit that never merged → 'not reviewed' with what happened as evidence. 'running' is written at launch. A split yields U-xxa/U-xxb replacing the original in requirements[].units."
+	},
+	"harness": {
+		"parallelWorkers": true,
+		"concurrencyCap": 4,
+		"capSource": "assumed — user could not state one",
+		"isolatedWorktrees": true,
+		"modelRouting": "available",
+		"tiers": { "cheap": null, "mid": null, "strong": null }
+	},
+	"integration": {
+		"repoPath": "/absolute/path/to/repo",
+		"baseBranch": "master",
+		"planBranch": "plan/<slug>",
+		"worktreeRoot": "/absolute/path/to/repo-ultraplan/<slug>",
+		"stateOfRecord": "<worktreeRoot>/integration/.oms/plans/<slug>/plan.json, committed on the plan branch",
+		"unitBranchPattern": "u/<slug>/<id>",
+		"oracleBranchPattern": "o/<slug>/<R-id>",
+		"note": "created at execute time only; absolute paths recorded so a resumed session reconstructs them"
+	},
+	"metrics": {
+		"sequentialBaseline": 17,
+		"units": 6,
+		"waves": 3,
+		"criticalPathEffort": 8,
+		"capAdjustment": 0,
+		"orchestratorLane": 1,
+		"projectedSpeedup": 1.9,
+		"tokenMultipleVsSequential": "~3x at balanced",
+		"worthFanningOut": true,
+		"note": "baseline from the requirement list BEFORE decomposition, never summed from units; lane = batches × ~0.4, more at max"
+	},
+	"decisions": [
+		{
+			"text": "Amounts serialized as decimal strings, never floats",
+			"from": "convention: src/lib/export/invoices-csv.ts"
+		}
+	],
+	"requirements": [
+		{
+			"id": "R-02",
+			"text": "The export contains only that user's orders",
+			"inferred": false,
+			"universallyQuantified": false,
+			"units": ["U-02", "U-03"],
+			"oracle": {
+				"id": "O-02",
+				"testable": true,
+				"asserts": "GET /orders/export as user A returns only A's rows; B's rows never appear",
+				"boundary": "HTTP route",
+				"path": "tests/oracles/R-02.spec.ts",
+				"branch": "o/<slug>/R-02",
+				"uses": [],
+				"dueAfterUnit": "U-03",
+				"rearms": false,
+				"status": "pending",
+				"merged": false,
+				"baseline": { "path": null, "branch": "o/<slug>/R-02-baseline" }
+			},
+			"baselineVerdict": null,
+			"verdict": null,
+			"evidence": null,
+			"blockedBy": null
+		},
+		{
+			"id": "R-05",
+			"text": "The export button matches the toolbar's visual language",
+			"inferred": true,
+			"universallyQuantified": false,
+			"units": ["U-04"],
+			"oracle": {
+				"id": "O-05",
+				"testable": false,
+				"manualCriterion": "checked at the final review",
+				"path": null,
+				"dueAfterUnit": null,
+				"status": "n/a"
+			},
+			"baselineVerdict": null,
+			"verdict": null,
+			"evidence": null,
+			"blockedBy": null
+		}
+	],
+	"contracts": [
+		{
+			"path": "src/types/export.ts",
+			"kind": "type",
+			"status": "specified",
+			"encodes": ["R-02"],
+			"consumedBy": ["U-02", "U-03", "U-04"]
+		}
+	],
+	"units": [
+		{
+			"id": "U-01",
+			"title": "Frozen contracts + migration",
+			"wave": 0,
+			"size": "S",
+			"tier": "mid",
+			"model": null,
+			"infrastructural": true,
+			"covers": [],
+			"dependsOn": [],
+			"writes": ["src/types/export.ts", "migrations/0004_export_audit.sql"],
+			"uses": [],
+			"reads": [],
+			"acceptance": "<typecheck>",
+			"nonGoals": [],
+			"source": null,
+			"branch": "plan/<slug>",
+			"worktree": "<worktreeRoot>/integration",
+			"status": "pending",
+			"mergedAt": null,
+			"review": { "verdict": null, "evidence": null },
+			"deviations": []
+		},
+		{
+			"id": "U-02",
+			"title": "Serialize orders to CSV",
+			"wave": 1,
+			"size": "M",
+			"tier": "mid",
+			"model": null,
+			"infrastructural": false,
+			"covers": ["R-02"],
+			"dependsOn": ["U-01"],
+			"writes": [
+				"src/lib/export/orders-csv.ts",
+				"src/lib/export/orders-csv.test.ts"
+			],
+			"uses": [],
+			"reads": [
+				{
+					"path": "src/types/export.ts",
+					"lines": null,
+					"why": "frozen OrderExportRow type"
+				},
+				{
+					"path": "src/lib/export/invoices-csv.ts",
+					"lines": "1-60",
+					"why": "exemplar to imitate"
+				}
+			],
+			"acceptance": "<test runner> src/lib/export/orders-csv.test.ts",
+			"nonGoals": [
+				"route handler",
+				"src/lib/export/index.ts (wiring unit owns it)"
+			],
+			"source": null,
+			"branch": "u/<slug>/U-02",
+			"worktree": "<worktreeRoot>/U-02",
+			"status": "pending",
+			"mergedAt": null,
+			"review": { "verdict": null, "evidence": null },
+			"deviations": []
+		}
+	],
+	"gates": [
+		{
+			"after": "wave-0a",
+			"command": "<typecheck, or the cheapest whole-project check this toolchain has>"
+		},
+		{
+			"after": "wave-0a, before the first fan-out",
+			"command": "<one real acceptance command, run concurrently in two throwaway worktrees with the ignored config materialised>"
+		},
+		{
+			"after": "every-merge-batch",
+			"command": "<typecheck> && <oracles now due> && <test runner> <affected area>"
+		},
+		{
+			"after": "final",
+			"command": "<lint> && <typecheck> && <full suite> && <every oracle re-run>"
+		}
+	],
+	"ledger": [],
+	"contractRevisions": []
+}
