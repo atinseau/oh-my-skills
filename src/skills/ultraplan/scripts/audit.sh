@@ -49,6 +49,17 @@ check "baseline sum matches breakdown" \
 check "baseline estimated (non-zero) and speedup reported" \
   '.metrics | select((.sequentialBaseline // 0)==0 or (.projectedSpeedup // 0)==0) | "metrics incomplete"'
 
+check "constraints[] declared (an array, empty allowed)" \
+  'select((.constraints|type)!="array") | "constraints missing"'
+check "rulings[] present" \
+  'select((.rulings|type)!="array") | "rulings missing"'
+PLANDIR=$(dirname "$P")
+PH='TBD|TODO|implement later|fill in details|add appropriate|handle edge cases|similar to U-|write tests for the above'
+if ls "$PLANDIR"/plan.md "$PLANDIR"/packs/*.md >/dev/null 2>&1; then
+  hits=$(grep -nEi "$PH" "$PLANDIR"/plan.md "$PLANDIR"/packs/*.md 2>/dev/null | grep -v 'audit\|placeholder' || true)
+  if [ -n "$hits" ]; then echo "✗ no placeholders in plan.md / packs"; echo "$hits" | sed 's/^/    /'; fail=1; else echo "✓ no placeholders in plan.md / packs"; fi
+fi
+
 if [ "$MODE" = "--finish" ]; then
   check "finish: no null requirement verdict" \
     '.requirements[] | select(.verdict==null) | .id'

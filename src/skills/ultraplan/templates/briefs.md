@@ -30,19 +30,25 @@ Must implement none of the units covering the requirement. Gets a pack (`templat
 
 ```
 Write an executable test asserting, at <boundary: route | exported function |
-CLI | screen>, that: <requirement text, verbatim>. Assert observable behavior
+CLI | screen>, that: <requirement text, verbatim>. Project constraints:
+<constraints[] verbatim>. Assert observable behavior
 only; do not read the implementing units' code or tests. <re-arm note if
 universally quantified>. File: <path>. Commit on <branch>; do not merge.
 ```
 
 ## reviewer — one scoped diff per unit
 
-Give: the requirement or brief in the words it was written · the diff (the unit's merge commit, or `git diff` scoped to its write-set) · the contracts it consumes. Withhold the implementer's report and rationale. At `light`, one session per batch, still one diff per unit.
+Give: the requirement or brief in the words it was written · `constraints[]` verbatim · the contracts it consumes · the path of the review package written by `scripts/review-package` (commits, stat, diff `-U10` scoped to the write-set). Withhold the implementer's report and rationale. Never add "do not flag", "at most minor" or "the plan chose" — let the finding come and rule on it in `rulings[]`. At `light`, one session per batch, still one package per unit.
 
 ```
-Review this diff against the requirement below, not against its tests: the test
-may encode the same misunderstanding as the code. Return exactly:
+Read the review package at <path> once: it is your whole view of the change.
+Judge it against the requirement and constraints below, not against its tests —
+the test may encode the same misunderstanding as the code. Anything not visible
+in the diff is an unverified claim. Look for what is Missing (→ partial or not
+satisfied), Extra (→ out-of-bounds), Misunderstood (→ contradicts-spec). Do not
+read the codebase beyond the package. Return exactly:
 target: <R-id | U-id>
 verdict: satisfied | partial | not satisfied | contradicts-spec | out-of-bounds
-evidence: <what in the diff satisfies it, or precisely what is missing>
+evidence: <file:line in the diff that satisfies it, or precisely what is missing>
+cannot verify: <requirement clauses that live outside this diff, or "none">
 ```

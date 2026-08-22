@@ -1,6 +1,6 @@
 # Worker pack
 
-One per unit and per oracle. Complete = a worker that has never seen the repository runs no exploratory search. Commands and paths are the project's own, read from its config.
+One file per unit and per oracle at `.oms/plans/<slug>/packs/<id>.md`; the worker receives the path, never the text. Complete = a worker that has never seen the repository runs no exploratory search. Commands and paths are the project's own, read from its config.
 
 ```markdown
 ### U-04 — Serialize orders to CSV
@@ -14,6 +14,10 @@ Wave 1 · size M · tier mid (<model id or unrouted>) · covers R-02
 **Outcome**
 `serializeOrders(rows: OrderExportRow[]): string` returns RFC 4180 CSV with a header
 row, ISO-8601 dates in UTC, and amounts as decimal strings, never floats.
+
+**Constraints** (project-wide, verbatim from the spec)
+- No new dependencies.
+- Node 20+; no Bun-only APIs in `src/lib`.
 
 **Owns (may write)**
 - src/lib/export/orders-csv.ts
@@ -44,13 +48,16 @@ export type OrderExportRow = { id, createdAt (ISO-8601 UTC), customerEmail,
   instead of exploring.
 
 **When you're done**
-Commit on your branch and return the report below. Do not merge.
+Commit on your branch. Write your full report (what you built, tests run with
+output, anything unexpected) to `/abs/path/to/repo-ultraplan/<slug>/reports/U-04.md`,
+then return ONLY the 6-line report below. Do not merge.
 ```
 
 Field rules:
 
 - **Where you work** — absolute path and branch, in every pack including oracles'. A worker not told its directory commits in the user's checkout.
 - **Outcome** — observable result, not a procedure.
+- **Constraints** — `constraints[]` copied verbatim, in every pack including oracles'. Empty is stated as "none".
 - **Uses (exclusive)** — stated either way; `none` is a claim.
 - **Reads** — line ranges plus a one-line reason each; exactly one exemplar.
 - **Frozen contract** — full text only at plan time; once committed, path + the lines consumed.

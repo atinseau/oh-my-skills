@@ -41,9 +41,15 @@ Each contract beside the requirement text it encodes:
 
 Also here: <migrations, generated clients, dependency installs, lockfile changes>.
 
+## Constraints
+
+Project-wide rules copied verbatim from the spec — injected into every pack and review:
+
+- <constraint>
+
 ## Wave 1 — <N units in parallel>
 
-One block per unit, in the `templates/pack.md` format.
+One file per unit under `packs/<id>.md`, in the `templates/pack.md` format; list the ids here.
 
 ## Wave 2 — <…>
 

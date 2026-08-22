@@ -74,8 +74,8 @@ git -C "$REPO" worktree add -b u/<slug>/<id> "$WT/<id>" plan/<slug>
 
 - [ ] Materialise the ignored files from preflight — with a **per-worktree** database name or schema, port offset and cache directory derived from the unit id through the environment. Config copied unchanged into several worktrees = the collision the plan declared, arriving now; either parameterise or those units do not share a wave.
 - [ ] Dependencies: install, or link from a shared store — never from the user's checkout. Check disk cost first; cap concurrent worktrees below the harness cap if needed. A build cache with an exclusive lock (Cargo target dir) is per-worktree or declared in `uses`.
-- [ ] **Re-render the pack**: each quoted contract → path + the lines consumed. Sequential mode: also rescope the acceptance to the unit's files.
-- [ ] Hand over pack + contract paths + return-report format (`templates/pack.md`). Commit and report, never merge.
+- [ ] **Re-render the pack file** `<WT>/integration/.oms/plans/<slug>/packs/<id>.md`: each quoted contract → path + the lines consumed; `constraints[]` included. Sequential mode: also rescope the acceptance to the unit's files.
+- [ ] Hand over the pack **path** (never its text), the report path `<WT>/reports/<id>.md` for the full write-up, and the 6-line return contract (`templates/pack.md`). Commit and report, never merge.
 - [ ] `plan.json`: `status: running` + branch, **at launch**.
 
 **Oracles are units**: branch `o/<slug>/<R-id>` from the plan branch, own worktree, write-set = its spec files only, a resource-set, commit → report → merged in the same loop. Launch writers from wave 1 as slots free up, in due-date order. A due oracle not merged **fails the gate**: finish it, merge it, re-gate. Check the file exists before running it (runners exit 0 on an empty glob). Writer failed → verdict `not satisfied — oracle not written`.
@@ -127,7 +127,8 @@ git -C "$WT/integration" add -f .oms/plans/<slug> && git -C "$WT/integration" co
 ```
 
 - [ ] Gate: the profile's check + oracles now due. One gate per batch.
-- [ ] Reviews the merges unlocked: units per profile, requirements whose last covering unit landed. `contradicts-spec` → user now, dependents held.
+- [ ] Reviews the merges unlocked: units per profile, requirements whose last covering unit landed. One package per unit: `scripts/review-package <WT>/integration plan/<slug>@{before} <merge-commit> <WT>/reviews/<id>.diff -- <write-set>` — the reviewer gets the path, the orchestrator never reads it. `contradicts-spec` → user now, dependents held.
+- [ ] Append a ruling to `rulings[]` for every conflict, ambiguity or plan defect you decided this batch.
 - [ ] Write every field the batch changed before committing: `units[].status`, `units[].review`, `units[].deviations`, `requirements[].verdict` + `evidence`, `requirements[].oracle.merged` / `.status`, and `baselineVerdict` when a baseline ran.
 - [ ] `plan.json` committed = the handoff if the session ends.
 
@@ -135,9 +136,9 @@ git -C "$WT/integration" add -f .oms/plans/<slug> && git -C "$WT/integration" co
 
 | Event | Do | Write |
 |---|---|---|
-| unit fails acceptance | retry once with the output appended to its pack → escalate one tier (single-model harness: split into `U-05a`/`U-05b`, replacing the original in `requirements[].units`) → stop the lineage, drop worktree and branch | dependents `held`; their requirements `not satisfied — blocked by U-xx` |
+| unit fails acceptance or review | **resume the same worker** once (its context is intact) with the failure output or the findings verbatim → escalate: fresh worker, one tier up, given the previous report path (single-model harness: split into `U-05a`/`U-05b`, replacing the original in `requirements[].units`) → stop the lineage, drop worktree and branch | dependents `held`; their requirements `not satisfied — blocked by U-xx` |
 | oracle fails after merge | not a unit failure: reopen the unit with the oracle's output; never edit the oracle | unit `reopened` |
-| reopen a merged unit | recreate from the integration branch as it stands, branch `u/<slug>/<id>-r2`, original pack + oracle output | `reopened` |
+| reopen a merged unit | recreate from the integration branch as it stands, branch `u/<slug>/<id>-r2`, original pack + oracle output; the re-review is **scoped**: the findings list, ADDRESSED / NOT ADDRESSED each, plus new breakage in the fix diff only | `reopened` |
 | contract wrong, nothing merged against it | stop the wave, fix in the orchestrator, commit, relaunch affected units from the new base | — |
 | contract wrong, units merged against it | stop launching · checkpoint 4 with the human · change and commit the contract · reopen affected units **in series** (`-r2`, each from integration after the previous merged) · suspend the gate until the last merges, then gate + every oracle those units cover. Past ~⅓ of merged units or a chain longer than the sequential baseline: recompile from the corrected spec | `contractRevisions[]`: contract, change, invalidated units |
 | spec wrong | the user; no retry count answers a question nobody asked | — |
@@ -146,7 +147,7 @@ git -C "$WT/integration" add -f .oms/plans/<slug> && git -C "$WT/integration" co
 ## Finish
 
 1. Full project verification on the integration worktree **and every oracle re-run**, not only those due.
-2. Report what happened: changes by area · every requirement with verdict and evidence (never blank; Merge: baseline verdict beside it) · what was verified, commands and numbers · what still fails, quoted · what was left out and why · deviations and the unit that introduced them.
+2. Report what happened: changes by area · **every ruling** from `rulings[]`, in order, with its cost if wrong — the only place those decisions reach the user · every requirement with verdict and evidence (never blank; Merge: baseline verdict beside it) · what was verified, commands and numbers · what still fails, quoted · what was left out and why · deviations and the unit that introduced them.
 3. Hand over the branch and the diff against the starting branch. Merging, pushing and opening a PR are the user's.
 
 ## Sequential mode

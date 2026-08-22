@@ -10,6 +10,7 @@ Input: a spec, PRD or issue (Forge), or one or more plans (Merge — see the del
 - [ ] A question surfaced by reconnaissance that the codebase cannot answer → a second batch, labelled as such; never folded silently into an assumption.
 - [ ] Anything still unresolved when workers would start → freeze it in a contract, or do not fan out.
 - [ ] Spec too thin to triage (no acceptance criteria) → say so, help write the spec first.
+- [ ] Copy the spec's project-wide rules — version floors, dependency limits, portability, naming and copy rules — verbatim into `constraints[]`. Every pack, oracle brief and reviewer brief carries them.
 
 ## 2. Requirements
 
@@ -104,7 +105,7 @@ Compiled:
 - **mid** — bounded implementation with resolved design, read-heavy exploration, ordinary feature work with a clear acceptance command.
 - **strong** — ambiguity that survived the spec, cross-cutting design, security or data-loss judgment, anything expensive to detect when wrong.
 
-Cheapest tier that passes the acceptance; escalate for uncertainty, never for length or importance. Record `tier` and `model` separately; `model` is a verified identifier or `null` (unrouted). Routing unavailable → absorb hardness with structure: split the strong unit, freeze another contract, tighten its acceptance, or keep it in the orchestrator.
+Turn count beats token price: the cheapest tier takes two to three times the turns on multi-step work. **cheap** only when the pack is a transcription — one or two files, an exemplar to mirror, a contract to satisfy; **mid** is the floor for every other unit, for reviewers and for oracle writers; escalate to **strong** for uncertainty, never for length or importance. Record `tier` and `model` separately; `model` is a verified identifier or `null` (unrouted). Routing unavailable → absorb hardness with structure: split the strong unit, freeze another contract, tighten its acceptance, or keep it in the orchestrator.
 
 ## 11. Metrics
 
@@ -121,7 +122,7 @@ projected speedup 36 / 18 = 2.0x · tokens ~3x sequential
 
 ## 12. Emit and present
 
-- [ ] `templates/plan.md` + `templates/plan.json`; packs per `templates/pack.md`; oracle specs per `references/conformance.md`.
+- [ ] `templates/plan.md` + `templates/plan.json`; one pack file per unit and per oracle under `.oms/plans/<slug>/packs/<id>.md` per `templates/pack.md`; oracle specs per `references/conformance.md`.
 - [ ] `scripts/audit.sh plan.json` passes; plus by hand: every acceptance command exists in this repo, every pack answers "where do I look?", nothing from the spec is unaccounted for.
 - [ ] Present: metrics line · decisions · inferred requirements · wave-0a contracts, each beside the requirement text it encodes.
 - [ ] Offer Execute. Do not start it.

@@ -41,7 +41,8 @@ Oracles, reviews, verdicts, checkpoints: `references/conformance.md`. Shape, not
 6. No verdict is `null` in a finished run. A held or dropped lineage gets `not satisfied — blocked by U-xx` the moment it is held.
 7. Plan time touches git not at all: Forge and Merge write `.oms/plans/<slug>/` and nothing else. Execute creates `plan/<slug>` and worktrees in a sibling directory; the user's checkout is never modified — the one exception is sequential mode on a harness without worktrees, announced before starting. Sequential mode is run from `references/execute.md`, never improvised from this summary.
 8. Workers commit and report. Only the orchestrator merges. A merge conflict is a decomposition bug: abort, reassign the file, re-brief.
-9. The orchestrator is one agent and the run's ceiling: batch merges, gate once per batch, never re-read what a report summarised, never re-verify what an acceptance command proved, update `plan.json` with targeted `jq` writes, commit it once per batch.
+9. The orchestrator is one agent and the run's ceiling: batch merges, gate once per batch, never re-read what a report summarised, never re-verify what an acceptance command proved, update `plan.json` with targeted `jq` writes, commit it once per batch. Artifacts travel as **files**, never pasted into prompts: packs, worker reports, review packages.
+11. Every decision the orchestrator takes on the user's behalf during a run is a **ruling** in `plan.json` — what, why, cost if wrong — and the final report lists them all.
 10. One dated kebab-case slug names the plan directory, the branch and the worktree root.
 
 ## Profiles
@@ -69,7 +70,7 @@ Ask; do not introspect. Answerable: "can you run several agents at once, each in
 4. Reconnaissance in the orchestrator, once: explorers return findings, not files.
 5. Units by who-writes-which-files; coverage map; `infrastructural` label for wiring, e2e, migrations, docs.
 6. Compile: edges → contracts → acceptance trap → resources → waves → tiers → metrics.
-7. Packs (`templates/pack.md`) and oracle specifications (`references/conformance.md`).
+7. Packs as files under `.oms/plans/<slug>/packs/` (`templates/pack.md`), oracle specifications (`references/conformance.md`), the spec's global constraints copied verbatim into `constraints[]`.
 8. Emit `.oms/plans/<slug>/plan.md` + `plan.json`, run `scripts/audit.sh`, present: metrics line, decisions, inferred requirements, contracts beside the requirement text each encodes. Projected speedup below ~1.5 → sequential plan, keep coverage map, contracts and oracle specs. Offer Execute; never start it unasked.
 
 ## Red flags — stop and re-read the rule
