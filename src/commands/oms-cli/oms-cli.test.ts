@@ -1,38 +1,35 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { GenericContainer, type StartedTestContainer } from "testcontainers";
+import type { StartedTestContainer } from "testcontainers";
 import {
 	copyToContainer,
 	exec,
 	HOME,
 	PROJECT_DIR,
+	startContainer,
 } from "../../../tests/helpers";
 
 describe("oms command", () => {
 	let container: StartedTestContainer;
-	let id: string;
+	let id: StartedTestContainer;
 
 	beforeAll(async () => {
-		container = await new GenericContainer("alpine:latest")
-			.withCommand(["sleep", "infinity"])
-			.start();
-		id = container.getId();
-
-		exec(id, "apk add --no-cache bash >/dev/null 2>&1");
-		exec(id, "mkdir -p /commands/oms-cli");
-		copyToContainer(
+		container = await startContainer();
+		id = container;
+		await exec(id, "mkdir -p /commands/oms-cli");
+		await copyToContainer(
 			id,
 			`${PROJECT_DIR}/src/commands/oms-cli/oms.sh`,
 			"/commands/oms-cli/oms.sh",
 		);
-		exec(id, "chmod +x /commands/oms-cli/oms.sh");
+		await exec(id, "chmod +x /commands/oms-cli/oms.sh");
 	}, 60_000);
 
 	afterAll(async () => {
 		if (container) await container.stop();
 	});
 
-	it("should print usage by default", () => {
-		const result = exec(
+	it("should print usage by default", async () => {
+		const result = await exec(
 			id,
 			`bash -lc 'source /commands/oms-cli/oms.sh && oms'`,
 		);
@@ -44,8 +41,8 @@ describe("oms command", () => {
 		expect(result.output).toContain("--help");
 	});
 
-	it("should print usage with --help", () => {
-		const result = exec(
+	it("should print usage with --help", async () => {
+		const result = await exec(
 			id,
 			`bash -lc 'source /commands/oms-cli/oms.sh && oms --help'`,
 		);
@@ -57,56 +54,56 @@ describe("oms command", () => {
 		expect(result.output).toContain("--help");
 	});
 
-	it("should delegate update to the installed update script in manual mode", () => {
-		exec(id, `mkdir -p ${HOME}/.oh-my-skills/scripts`);
-		exec(
+	it("should delegate update to the installed update script in manual mode", async () => {
+		await exec(id, `mkdir -p ${HOME}/.oh-my-skills/scripts`);
+		await exec(
 			id,
 			`cat > ${HOME}/.oh-my-skills/scripts/update.sh <<'EOF'
 #!/bin/bash
 printf '%s' "$1" > "$HOME/update-args.txt"
 EOF`,
 		);
-		exec(id, `chmod +x ${HOME}/.oh-my-skills/scripts/update.sh`);
+		await exec(id, `chmod +x ${HOME}/.oh-my-skills/scripts/update.sh`);
 
-		const result = exec(
+		const result = await exec(
 			id,
 			`bash -lc 'source /commands/oms-cli/oms.sh && oms update'`,
 		);
 		expect(result.exitCode).toBe(0);
 
-		const recorded = exec(id, `cat ${HOME}/update-args.txt`);
+		const recorded = await exec(id, `cat ${HOME}/update-args.txt`);
 		expect(recorded.output).toBe("--manual");
 	});
 
-	it("should delegate hooks to the installed hooks script", () => {
-		exec(id, `mkdir -p ${HOME}/.oh-my-skills/scripts`);
-		exec(
+	it("should delegate hooks to the installed hooks script", async () => {
+		await exec(id, `mkdir -p ${HOME}/.oh-my-skills/scripts`);
+		await exec(
 			id,
 			`cat > ${HOME}/.oh-my-skills/scripts/hooks.sh <<'EOF'
 #!/bin/bash
 printf '%s' "$*" > "$HOME/hooks-args.txt"
 EOF`,
 		);
-		exec(id, `chmod +x ${HOME}/.oh-my-skills/scripts/hooks.sh`);
+		await exec(id, `chmod +x ${HOME}/.oh-my-skills/scripts/hooks.sh`);
 
-		const result = exec(
+		const result = await exec(
 			id,
 			`bash -lc 'source /commands/oms-cli/oms.sh && oms hooks enable sample-hook'`,
 		);
 		expect(result.exitCode).toBe(0);
 
-		const recorded = exec(id, `cat ${HOME}/hooks-args.txt`);
+		const recorded = await exec(id, `cat ${HOME}/hooks-args.txt`);
 		expect(recorded.output).toBe("enable sample-hook");
 	});
 
-	it("should print version with --version", () => {
-		exec(id, `mkdir -p ${HOME}/.oh-my-skills`);
-		exec(
+	it("should print version with --version", async () => {
+		await exec(id, `mkdir -p ${HOME}/.oh-my-skills`);
+		await exec(
 			id,
 			`echo '{"version":"1.2.3"}' > ${HOME}/.oh-my-skills/registry.json`,
 		);
 
-		const result = exec(
+		const result = await exec(
 			id,
 			`bash -lc 'source /commands/oms-cli/oms.sh && oms --version'`,
 		);
@@ -115,8 +112,8 @@ EOF`,
 		expect(result.output).toBe("oh-my-skills v1.2.3");
 	});
 
-	it("should print version with version subcommand", () => {
-		const result = exec(
+	it("should print version with version subcommand", async () => {
+		const result = await exec(
 			id,
 			`bash -lc 'source /commands/oms-cli/oms.sh && oms version'`,
 		);
@@ -125,8 +122,8 @@ EOF`,
 		expect(result.output).toBe("oh-my-skills v1.2.3");
 	});
 
-	it("should fail for unknown subcommands", () => {
-		const result = exec(
+	it("should fail for unknown subcommands", async () => {
+		const result = await exec(
 			id,
 			`bash -lc 'source /commands/oms-cli/oms.sh && oms unknown 2>&1'`,
 		);

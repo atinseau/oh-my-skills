@@ -83,6 +83,25 @@ sanitize() {
     printf '%s' "${p//\//_}"
 }
 
+# Kill a process and every descendant it spawned, deepest first.
+#
+# Both runners background a *subshell*, so the command the user actually asked
+# for is a grandchild (a great-grandchild in stream mode, which pipes through a
+# reader loop). Killing only the recorded PID left those descendants alive and
+# reparented to init: Ctrl+C returned the prompt while the builds kept running
+# and writing into the repos.
+#
+# Descendants must be enumerated before their parent dies — once it is gone they
+# are reparented and `pgrep -P` can no longer reach them — hence the post-order
+# recursion. `pgrep -P` is available on both macOS (BSD) and BusyBox.
+kill_tree() {
+    local pid="$1" child
+    for child in $(pgrep -P "$pid" 2>/dev/null); do
+        kill_tree "$child"
+    done
+    kill "$pid" 2>/dev/null || true
+}
+
 # Print ✓ or ✗ for a completed job.
 print_status() {
     local rc="$1" name="$2"
@@ -311,7 +330,7 @@ run_step() {
         pids+=($!)
     done
 
-    trap 'for p in "${pids[@]}"; do kill "$p" 2>/dev/null; done; rm -rf "$tmpdir" 2>/dev/null; exit 130' INT TERM
+    trap 'for p in "${pids[@]}"; do kill_tree "$p"; done; rm -rf "$tmpdir" 2>/dev/null; exit 130' INT TERM
 
     printf '\n'
     if is_uniform cmds; then
@@ -406,14 +425,15 @@ run_stream() {
         pids+=($!)
     done
 
-    # Ctrl+C: kill children and exit
-    trap 'for p in "${pids[@]}"; do kill "$p" 2>/dev/null; done; exit 130' INT
+    # Ctrl+C: kill children and exit. TERM is trapped alongside INT so that
+    # `kill` on the runner cleans up the same way batch mode does.
+    trap 'for p in "${pids[@]}"; do kill_tree "$p"; done; exit 130' INT TERM
 
     for pid in "${pids[@]}"; do
         wait "$pid" 2>/dev/null || true
     done
 
-    trap - INT
+    trap - INT TERM
 }
 
 # ── Pipeline orchestrator ─────────────────────────────────────────────────

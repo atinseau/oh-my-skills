@@ -23,4 +23,10 @@ jobs:
       - name: Validate bash scripts syntax
         run: bash -n scripts/install.sh && bash -n scripts/uninstall.sh && bash -n scripts/update.sh && bash -n scripts/hooks.sh
 
-      - run: TESTCONTAINERS_RYUK_DISABLED=true bun test --timeout 60000
+      # Built explicitly so the parallel workers never race on it.
+      - name: Build the shared test image
+        run: bun run test:image
+
+      # --timings makes the workers start on the slowest files first; on a
+      # 4-vCPU runner that is worth ~15% of wall clock.
+      - run: TESTCONTAINERS_RYUK_DISABLED=true bun test --parallel --timings=tests/timings.json --timeout 60000

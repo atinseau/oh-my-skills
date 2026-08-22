@@ -1,0 +1,16 @@
+{
+	"version": 1,
+	"files": {
+		"src/commands/never-sleep/never-sleep.test.ts": 10881,
+		"tests/lib.test.ts": 5794,
+		"src/commands/oms-run-all/oms-run-all.test.ts": 3979,
+		"src/commands/oms-git-diff/oms-git-diff.test.ts": 3229,
+		"tests/uninstall.test.ts": 2789,
+		"tests/update.test.ts": 2224,
+		"src/hooks/handoff/hook.test.ts": 1664,
+		"src/commands/oms-cli/oms-cli.test.ts": 1573,
+		"tests/install.test.ts": 1469,
+		"tests/hooks.test.ts": 1041,
+		"tests/hooks-cli.test.ts": 839
+	}
+}

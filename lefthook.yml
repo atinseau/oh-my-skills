@@ -7,5 +7,9 @@ pre-commit:
     - group:
         parallel: true
         jobs:
-          - run: bun test
+          # `bun run test` (not `bun test`) so pretest builds the shared image.
+          # Never use --changed here: it follows the JS import graph, and the
+          # suite's real inputs are the shell scripts it docker-cp's in, so a
+          # change to scripts/*.sh selects zero tests.
+          - run: bun run test
             interactive: true

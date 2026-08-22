@@ -22,10 +22,14 @@ bun run check
 bash -n scripts/lib.sh && bash -n scripts/install.sh && bash -n scripts/uninstall.sh && bash -n scripts/update.sh && bash -n scripts/hooks.sh
 
 # Run all tests (requires Docker running)
-TESTCONTAINERS_RYUK_DISABLED=true bun test
+# `bun run test` (not `bun test`) — pretest builds the shared image first
+TESTCONTAINERS_RYUK_DISABLED=true bun run test
 
 # Run a single test file
 TESTCONTAINERS_RYUK_DISABLED=true bun test tests/install.test.ts
+
+# Re-record per-file durations after adding or reshaping a test file
+TESTCONTAINERS_RYUK_DISABLED=true bun run test:timings
 ```
 
 ## Architecture
@@ -139,10 +143,18 @@ src/hooks/<name>/
 
 **Test infrastructure:**
 - All tests run in Alpine containers via **testcontainers** (Docker required)
-- Real scripts copied into container via `docker cp`
+- Containers start from `oh-my-skills-test:latest`, built from `tests/Dockerfile` with every package the suite needs. Never `apk add` in a `beforeAll` — add the package to the Dockerfile instead
+- `helpers.ts` provides `startContainer()`, `exec()` and `copyToContainer()`. All three are **async — always `await` them**; a missing `await` silently reorders container state
+- `exec()` and `copyToContainer()` take the `StartedTestContainer`, not its id, and use testcontainers' native APIs (`container.exec()`, ~13ms vs ~34ms for spawning the `docker` CLI). The native call hung under Bun before 1.4
+- `exec().output` is **stdout only** — redirect with `2>&1` when a test needs stderr
 - Local git repo simulates the remote
 - Fake `claude`/`copilot` binaries created for LLM detection
-- `helpers.ts` provides `exec()` (wrapper around `docker exec` — testcontainers native `.exec()` hangs in bun) and `copyToContainer()`
+
+**Test suite performance:**
+- The suite runs with `--parallel --timings=tests/timings.json` (one worker process per file). Re-record `tests/timings.json` with `bun run test:timings` when durations shift materially — the file is written slowest-first, so it doubles as the slow-file report
+- **Never use `bun test --changed`.** It resolves the JS/TS import graph, but the suite's real inputs are the shell scripts it copies into containers, so a change to `scripts/*.sh` selects zero test files and the run goes green without testing anything
+- Tests inside one file share a container and mutate its state — do not make them `--concurrent`
+- Prefer bounded polling over fixed `sleep`s in container-side scripts, and keep the budget tight: a poll that never converges burns it in full on every run
 
 **Pattern for a new command test:**
 - Create `src/commands/<name>/<name>.test.ts`

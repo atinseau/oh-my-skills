@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { GenericContainer, type StartedTestContainer } from "testcontainers";
-import { copyToContainer, exec, PROJECT_DIR } from "../../../tests/helpers";
+import type { StartedTestContainer } from "testcontainers";
+import {
+	copyToContainer,
+	exec,
+	PROJECT_DIR,
+	startContainer,
+} from "../../../tests/helpers";
 
 /**
  * oms-git-diff command tests
@@ -23,36 +28,34 @@ import { copyToContainer, exec, PROJECT_DIR } from "../../../tests/helpers";
  */
 describe("oms-git-diff command", () => {
 	let container: StartedTestContainer;
-	let id: string;
+	let id: StartedTestContainer;
 
 	const REPO = "/repo";
 	const REMOTE = "/tmp/remote-repo";
 	const CMD = "/commands/oms-git-diff/oms-git-diff.sh";
 
 	// Helper: run oms-git-diff inside the cloned repo
-	const runDiff = (cwd = REPO) =>
-		exec(id, `cd ${cwd} && bash -c 'source ${CMD} && oms-git-diff'`);
+	const runDiff = async (cwd = REPO) =>
+		await exec(id, `cd ${cwd} && bash -c 'source ${CMD} && oms-git-diff'`);
 
 	// Helper: run a git command inside the cloned repo
-	const git = (cmd: string, cwd = REPO) => exec(id, `cd ${cwd} && git ${cmd}`);
+	const git = async (cmd: string, cwd = REPO) =>
+		await exec(id, `cd ${cwd} && git ${cmd}`);
 
 	beforeAll(async () => {
-		container = await new GenericContainer("alpine:latest")
-			.withCommand(["sleep", "infinity"])
-			.start();
-		id = container.getId();
+		container = await startContainer();
+		id = container;
 
 		// Install dependencies
-		exec(id, "apk add --no-cache bash git >/dev/null 2>&1");
 
 		// Copy the oms-git-diff command into the container
-		exec(id, "mkdir -p /commands/oms-git-diff");
-		copyToContainer(
+		await exec(id, "mkdir -p /commands/oms-git-diff");
+		await copyToContainer(
 			id,
 			`${PROJECT_DIR}/src/commands/oms-git-diff/oms-git-diff.sh`,
 			CMD,
 		);
-		exec(id, `chmod +x ${CMD}`);
+		await exec(id, `chmod +x ${CMD}`);
 
 		// -------------------------------------------------------
 		// Build the fake remote repository with branch topology:
@@ -62,63 +65,63 @@ describe("oms-git-diff command", () => {
 		//                          \
 		//   develop:                E --- F
 		// -------------------------------------------------------
-		exec(id, `mkdir -p ${REMOTE}`);
-		exec(
+		await exec(id, `mkdir -p ${REMOTE}`);
+		await exec(
 			id,
 			`cd ${REMOTE} && git init -b main && git config user.email 't@t' && git config user.name 'T'`,
 		);
 
 		// Commit A on main
-		exec(
+		await exec(
 			id,
 			`cd ${REMOTE} && echo "file-a" > a.txt && git add . && git commit -m "A"`,
 		);
 		// Commit B on main
-		exec(
+		await exec(
 			id,
 			`cd ${REMOTE} && echo "file-b" > b.txt && git add . && git commit -m "B"`,
 		);
 
 		// Create stage from main, add commits C and D
-		exec(id, `cd ${REMOTE} && git checkout -b stage`);
-		exec(
+		await exec(id, `cd ${REMOTE} && git checkout -b stage`);
+		await exec(
 			id,
 			`cd ${REMOTE} && echo "file-c" > c.txt && git add . && git commit -m "C"`,
 		);
-		exec(
+		await exec(
 			id,
 			`cd ${REMOTE} && echo "file-d" > d.txt && git add . && git commit -m "D"`,
 		);
 
 		// Create develop from stage, add commits E and F
-		exec(id, `cd ${REMOTE} && git checkout -b develop`);
-		exec(
+		await exec(id, `cd ${REMOTE} && git checkout -b develop`);
+		await exec(
 			id,
 			`cd ${REMOTE} && echo "file-e" > e.txt && git add . && git commit -m "E"`,
 		);
-		exec(
+		await exec(
 			id,
 			`cd ${REMOTE} && echo "file-f" > f.txt && git add . && git commit -m "F"`,
 		);
 
 		// Go back to main so clone gets main as default
-		exec(id, `cd ${REMOTE} && git checkout main`);
+		await exec(id, `cd ${REMOTE} && git checkout main`);
 
 		// -------------------------------------------------------
 		// Clone the repo (simulates a developer's local copy)
 		// -------------------------------------------------------
-		exec(id, `git clone ${REMOTE} ${REPO}`);
-		exec(
+		await exec(id, `git clone ${REMOTE} ${REPO}`);
+		await exec(
 			id,
 			`cd ${REPO} && git config user.email 't@t' && git config user.name 'T'`,
 		);
 
 		// Fetch all remote branches and set up local tracking branches
-		exec(id, `cd ${REPO} && git fetch origin`);
-		exec(id, `cd ${REPO} && git checkout -b stage origin/stage`);
-		exec(id, `cd ${REPO} && git checkout -b develop origin/develop`);
+		await exec(id, `cd ${REPO} && git fetch origin`);
+		await exec(id, `cd ${REPO} && git checkout -b stage origin/stage`);
+		await exec(id, `cd ${REPO} && git checkout -b develop origin/develop`);
 		// Go back to main
-		exec(id, `cd ${REPO} && git checkout main`);
+		await exec(id, `cd ${REPO} && git checkout main`);
 	}, 60_000);
 
 	afterAll(async () => {
@@ -130,20 +133,20 @@ describe("oms-git-diff command", () => {
 	// ===========================================================
 
 	describe("feature branch from develop", () => {
-		it("should diff only the feature commits against develop", () => {
+		it("should diff only the feature commits against develop", async () => {
 			// Create a feature branch from develop with 2 commits
-			git("checkout develop");
-			git("checkout -b feature/from-develop");
-			exec(
+			await git("checkout develop");
+			await git("checkout -b feature/from-develop");
+			await exec(
 				id,
 				`cd ${REPO} && echo "feat-1" > feat1.txt && git add . && git commit -m "G"`,
 			);
-			exec(
+			await exec(
 				id,
 				`cd ${REPO} && echo "feat-2" > feat2.txt && git add . && git commit -m "H"`,
 			);
 
-			const result = runDiff();
+			const result = await runDiff();
 			expect(result.exitCode).toBe(0);
 
 			// Should contain only changes from commits G and H
@@ -159,21 +162,21 @@ describe("oms-git-diff command", () => {
 			expect(result.output).not.toContain("file-f");
 
 			// Cleanup
-			git("checkout develop");
-			git("branch -D feature/from-develop");
+			await git("checkout develop");
+			await git("branch -D feature/from-develop");
 		});
 	});
 
 	describe("feature branch from stage", () => {
-		it("should diff only the feature commits against stage", () => {
-			git("checkout stage");
-			git("checkout -b feature/from-stage");
-			exec(
+		it("should diff only the feature commits against stage", async () => {
+			await git("checkout stage");
+			await git("checkout -b feature/from-stage");
+			await exec(
 				id,
 				`cd ${REPO} && echo "stage-feat" > stage-feat.txt && git add . && git commit -m "SF"`,
 			);
 
-			const result = runDiff();
+			const result = await runDiff();
 			expect(result.exitCode).toBe(0);
 
 			expect(result.output).toContain("stage-feat");
@@ -185,21 +188,21 @@ describe("oms-git-diff command", () => {
 			expect(result.output).not.toContain("file-b");
 
 			// Cleanup
-			git("checkout stage");
-			git("branch -D feature/from-stage");
+			await git("checkout stage");
+			await git("branch -D feature/from-stage");
 		});
 	});
 
 	describe("feature branch from main", () => {
-		it("should diff only the feature commits against main", () => {
-			git("checkout main");
-			git("checkout -b feature/from-main");
-			exec(
+		it("should diff only the feature commits against main", async () => {
+			await git("checkout main");
+			await git("checkout -b feature/from-main");
+			await exec(
 				id,
 				`cd ${REPO} && echo "main-feat" > main-feat.txt && git add . && git commit -m "MF"`,
 			);
 
-			const result = runDiff();
+			const result = await runDiff();
 			expect(result.exitCode).toBe(0);
 
 			expect(result.output).toContain("main-feat");
@@ -207,8 +210,8 @@ describe("oms-git-diff command", () => {
 			expect(result.output).not.toContain("file-b");
 
 			// Cleanup
-			git("checkout main");
-			git("branch -D feature/from-main");
+			await git("checkout main");
+			await git("branch -D feature/from-main");
 		});
 	});
 
@@ -217,14 +220,14 @@ describe("oms-git-diff command", () => {
 	// ===========================================================
 
 	describe("on develop (integration branch), with staged changes", () => {
-		it("should return only the staged diff, not commits from develop vs stage", () => {
-			git("checkout develop");
+		it("should return only the staged diff, not commits from develop vs stage", async () => {
+			await git("checkout develop");
 
 			// Stage a change without committing
-			exec(id, `cd ${REPO} && echo "staged-change" > staged.txt`);
-			git("add staged.txt");
+			await exec(id, `cd ${REPO} && echo "staged-change" > staged.txt`);
+			await git("add staged.txt");
 
-			const result = runDiff();
+			const result = await runDiff();
 			expect(result.exitCode).toBe(0);
 
 			// Should contain the staged file
@@ -235,47 +238,47 @@ describe("oms-git-diff command", () => {
 			expect(result.output).not.toContain("file-f");
 
 			// Cleanup
-			git("reset HEAD staged.txt");
-			exec(id, `cd ${REPO} && rm -f staged.txt`);
+			await git("reset HEAD staged.txt");
+			await exec(id, `cd ${REPO} && rm -f staged.txt`);
 		});
 	});
 
 	describe("on develop (integration branch), with unstaged changes", () => {
-		it("should return only the unstaged diff", () => {
-			git("checkout develop");
+		it("should return only the unstaged diff", async () => {
+			await git("checkout develop");
 
 			// Modify a tracked file without staging
-			exec(id, `cd ${REPO} && echo "modified-content" >> f.txt`);
+			await exec(id, `cd ${REPO} && echo "modified-content" >> f.txt`);
 
-			const result = runDiff();
+			const result = await runDiff();
 			expect(result.exitCode).toBe(0);
 
 			expect(result.output).toContain("modified-content");
 			expect(result.output).not.toContain("file-e");
 
 			// Cleanup
-			git("checkout -- f.txt");
+			await git("checkout -- f.txt");
 		});
 	});
 
 	describe("on develop (integration branch), no changes", () => {
-		it("should produce no output", () => {
-			git("checkout develop");
+		it("should produce no output", async () => {
+			await git("checkout develop");
 
-			const result = runDiff();
+			const result = await runDiff();
 			expect(result.exitCode).toBe(0);
 			expect(result.output).toBe("");
 		});
 	});
 
 	describe("on stage (integration branch), with staged changes", () => {
-		it("should return only the staged diff", () => {
-			git("checkout stage");
+		it("should return only the staged diff", async () => {
+			await git("checkout stage");
 
-			exec(id, `cd ${REPO} && echo "stage-staged" > stage-staged.txt`);
-			git("add stage-staged.txt");
+			await exec(id, `cd ${REPO} && echo "stage-staged" > stage-staged.txt`);
+			await git("add stage-staged.txt");
 
-			const result = runDiff();
+			const result = await runDiff();
 			expect(result.exitCode).toBe(0);
 
 			expect(result.output).toContain("stage-staged");
@@ -285,42 +288,42 @@ describe("oms-git-diff command", () => {
 			expect(result.output).not.toContain("file-d");
 
 			// Cleanup
-			git("reset HEAD stage-staged.txt");
-			exec(id, `cd ${REPO} && rm -f stage-staged.txt`);
+			await git("reset HEAD stage-staged.txt");
+			await exec(id, `cd ${REPO} && rm -f stage-staged.txt`);
 		});
 	});
 
 	describe("on stage (integration branch), no changes", () => {
-		it("should produce no output", () => {
-			git("checkout stage");
+		it("should produce no output", async () => {
+			await git("checkout stage");
 
-			const result = runDiff();
+			const result = await runDiff();
 			expect(result.exitCode).toBe(0);
 			expect(result.output).toBe("");
 		});
 	});
 
 	describe("on main (integration branch), with unstaged changes", () => {
-		it("should return only the unstaged diff", () => {
-			git("checkout main");
+		it("should return only the unstaged diff", async () => {
+			await git("checkout main");
 
-			exec(id, `cd ${REPO} && echo "main-change" >> b.txt`);
+			await exec(id, `cd ${REPO} && echo "main-change" >> b.txt`);
 
-			const result = runDiff();
+			const result = await runDiff();
 			expect(result.exitCode).toBe(0);
 
 			expect(result.output).toContain("main-change");
 
 			// Cleanup
-			git("checkout -- b.txt");
+			await git("checkout -- b.txt");
 		});
 	});
 
 	describe("on main (integration branch), no changes", () => {
-		it("should produce no output", () => {
-			git("checkout main");
+		it("should produce no output", async () => {
+			await git("checkout main");
 
-			const result = runDiff();
+			const result = await runDiff();
 			expect(result.exitCode).toBe(0);
 			expect(result.output).toBe("");
 		});
@@ -331,27 +334,27 @@ describe("oms-git-diff command", () => {
 	// ===========================================================
 
 	describe("feature branch with commits AND staged changes", () => {
-		it("should return the commit diff (highest priority) which includes the committed file", () => {
-			git("checkout develop");
-			git("checkout -b feature/cascade-test");
-			exec(
+		it("should return the commit diff (highest priority) which includes the committed file", async () => {
+			await git("checkout develop");
+			await git("checkout -b feature/cascade-test");
+			await exec(
 				id,
 				`cd ${REPO} && echo "committed-content" > committed.txt && git add . && git commit -m "committed"`,
 			);
 
 			// Also stage a separate file (not committed)
-			exec(id, `cd ${REPO} && echo "extra-staged" > extra.txt`);
-			git("add extra.txt");
+			await exec(id, `cd ${REPO} && echo "extra-staged" > extra.txt`);
+			await git("add extra.txt");
 
-			const result = runDiff();
+			const result = await runDiff();
 			expect(result.exitCode).toBe(0);
 
 			// Commit diff (merge-base..HEAD) includes committed.txt
 			expect(result.output).toContain("committed-content");
 
 			// Cleanup
-			git("checkout develop");
-			git("branch -D feature/cascade-test");
+			await git("checkout develop");
+			await git("branch -D feature/cascade-test");
 		});
 	});
 
@@ -360,8 +363,8 @@ describe("oms-git-diff command", () => {
 	// ===========================================================
 
 	describe("not a git repository", () => {
-		it("should fail with an error on stderr", () => {
-			const result = exec(
+		it("should fail with an error on stderr", async () => {
+			const result = await exec(
 				id,
 				`cd /tmp && bash -c 'source ${CMD} && oms-git-diff 2>&1'`,
 			);
@@ -371,13 +374,13 @@ describe("oms-git-diff command", () => {
 	});
 
 	describe("detached HEAD", () => {
-		it("should fail with an error on stderr", () => {
+		it("should fail with an error on stderr", async () => {
 			// Go to a known branch first, then detach
-			git("checkout develop");
-			const headSha = git("rev-parse HEAD");
-			git(`checkout ${headSha.output}`);
+			await git("checkout develop");
+			const headSha = await git("rev-parse HEAD");
+			await git(`checkout ${headSha.output}`);
 
-			const result = exec(
+			const result = await exec(
 				id,
 				`cd ${REPO} && bash -c 'source ${CMD} && oms-git-diff 2>&1'`,
 			);
@@ -385,24 +388,24 @@ describe("oms-git-diff command", () => {
 			expect(result.output).toContain("detached HEAD");
 
 			// Cleanup
-			git("checkout develop");
+			await git("checkout develop");
 		});
 	});
 
 	describe("oms-gd alias", () => {
-		it("should produce the same output as oms-git-diff", () => {
-			git("checkout develop");
-			git("checkout -b feature/alias-test");
-			exec(
+		it("should produce the same output as oms-git-diff", async () => {
+			await git("checkout develop");
+			await git("checkout -b feature/alias-test");
+			await exec(
 				id,
 				`cd ${REPO} && echo "alias-content" > alias.txt && git add . && git commit -m "alias-commit"`,
 			);
 
-			const viaDirect = exec(
+			const viaDirect = await exec(
 				id,
 				`cd ${REPO} && bash -c 'shopt -s expand_aliases; source ${CMD} && oms-git-diff'`,
 			);
-			const viaAlias = exec(
+			const viaAlias = await exec(
 				id,
 				`cd ${REPO} && bash -c 'shopt -s expand_aliases; source ${CMD}; eval oms-gd'`,
 			);
@@ -412,23 +415,23 @@ describe("oms-git-diff command", () => {
 			expect(viaAlias.output).toBe(viaDirect.output);
 
 			// Cleanup
-			git("checkout develop");
-			git("branch -D feature/alias-test");
+			await git("checkout develop");
+			await git("branch -D feature/alias-test");
 		});
 	});
 
 	describe("feature branch with no remote tracking (new local branch not pushed)", () => {
-		it("should still detect the closest parent and diff correctly", () => {
-			git("checkout develop");
-			git("checkout -b feature/unpushed");
-			exec(
+		it("should still detect the closest parent and diff correctly", async () => {
+			await git("checkout develop");
+			await git("checkout -b feature/unpushed");
+			await exec(
 				id,
 				`cd ${REPO} && echo "unpushed-work" > unpushed.txt && git add . && git commit -m "unpushed"`,
 			);
 
 			// Branch has no origin/feature/unpushed → local_head != remote_head (empty)
 			// Should be detected as feature branch with develop as closest parent
-			const result = runDiff();
+			const result = await runDiff();
 			expect(result.exitCode).toBe(0);
 
 			expect(result.output).toContain("unpushed-work");
@@ -436,8 +439,8 @@ describe("oms-git-diff command", () => {
 			expect(result.output).not.toContain("file-f");
 
 			// Cleanup
-			git("checkout develop");
-			git("branch -D feature/unpushed");
+			await git("checkout develop");
+			await git("branch -D feature/unpushed");
 		});
 	});
 
@@ -446,16 +449,16 @@ describe("oms-git-diff command", () => {
 	// ===========================================================
 
 	describe("direct diff mode: explicit branch argument", () => {
-		it("should diff HEAD against the given branch name", () => {
-			git("checkout develop");
-			git("checkout -b feature/direct-diff-test");
-			exec(
+		it("should diff HEAD against the given branch name", async () => {
+			await git("checkout develop");
+			await git("checkout -b feature/direct-diff-test");
+			await exec(
 				id,
 				`cd ${REPO} && echo "direct-content" > direct.txt && git add . && git commit -m "direct"`,
 			);
 
 			// Pass "main" explicitly — should diff against origin/main
-			const result = exec(
+			const result = await exec(
 				id,
 				`cd ${REPO} && bash -c 'source ${CMD} && oms-git-diff main'`,
 			);
@@ -471,20 +474,20 @@ describe("oms-git-diff command", () => {
 			expect(result.output).not.toContain("file-b");
 
 			// Cleanup
-			git("checkout develop");
-			git("branch -D feature/direct-diff-test");
+			await git("checkout develop");
+			await git("branch -D feature/direct-diff-test");
 		});
 
-		it("should diff HEAD against a local branch ref when no origin/ exists", () => {
-			git("checkout main");
-			git("checkout -b feature/local-ref-test");
-			exec(
+		it("should diff HEAD against a local branch ref when no origin/ exists", async () => {
+			await git("checkout main");
+			await git("checkout -b feature/local-ref-test");
+			await exec(
 				id,
 				`cd ${REPO} && echo "local-ref" > local-ref.txt && git add . && git commit -m "local-ref"`,
 			);
 
 			// Pass "main" — origin/main exists so it resolves to origin/main
-			const result = exec(
+			const result = await exec(
 				id,
 				`cd ${REPO} && bash -c 'source ${CMD} && oms-git-diff main'`,
 			);
@@ -492,14 +495,14 @@ describe("oms-git-diff command", () => {
 			expect(result.output).toContain("local-ref");
 
 			// Cleanup
-			git("checkout main");
-			git("branch -D feature/local-ref-test");
+			await git("checkout main");
+			await git("branch -D feature/local-ref-test");
 		});
 
-		it("should return error for an unknown branch", () => {
-			git("checkout main");
+		it("should return error for an unknown branch", async () => {
+			await git("checkout main");
 
-			const result = exec(
+			const result = await exec(
 				id,
 				`cd ${REPO} && bash -c 'source ${CMD} && oms-git-diff nonexistent-branch-xyz 2>&1'`,
 			);
@@ -509,29 +512,29 @@ describe("oms-git-diff command", () => {
 	});
 
 	describe("feature branch fully pushed (local == origin/feature)", () => {
-		it("should show all feature commits vs base, not treat it as integration", () => {
-			git("checkout develop");
-			git("checkout -b feature/pushed-fully");
-			exec(
+		it("should show all feature commits vs base, not treat it as integration", async () => {
+			await git("checkout develop");
+			await git("checkout -b feature/pushed-fully");
+			await exec(
 				id,
 				`cd ${REPO} && echo "pushed-1" > pushed1.txt && git add . && git commit -m "P1"`,
 			);
-			exec(
+			await exec(
 				id,
 				`cd ${REPO} && echo "pushed-2" > pushed2.txt && git add . && git commit -m "P2"`,
 			);
-			exec(
+			await exec(
 				id,
 				`cd ${REPO} && echo "pushed-3" > pushed3.txt && git add . && git commit -m "P3"`,
 			);
 
 			// Simulate pushing: set up origin/feature/pushed-fully at the same commit
 			// (push to the local remote repo used in setup)
-			exec(id, `cd ${REPO} && git push ${REMOTE} feature/pushed-fully`);
+			await exec(id, `cd ${REPO} && git push ${REMOTE} feature/pushed-fully`);
 			// local HEAD == origin/feature/pushed-fully now
-			exec(id, `cd ${REPO} && git fetch origin`);
+			await exec(id, `cd ${REPO} && git fetch origin`);
 
-			const result = runDiff();
+			const result = await runDiff();
 			expect(result.exitCode).toBe(0);
 
 			// All 3 feature commits should appear in the diff
@@ -544,8 +547,8 @@ describe("oms-git-diff command", () => {
 			expect(result.output).not.toContain("file-f");
 
 			// Cleanup
-			git("checkout develop");
-			git("branch -D feature/pushed-fully");
+			await git("checkout develop");
+			await git("branch -D feature/pushed-fully");
 		});
 	});
 });
