@@ -73,7 +73,7 @@
 			"R-05": "S",
 			"shared: migration + wiring + docs": "M"
 		},
-		"units": 6,
+		"units": 4,
 		"waves": 3,
 		"criticalPathEffort": 8,
 		"capAdjustment": 0,
@@ -214,6 +214,75 @@
 			"source": null,
 			"branch": "u/<slug>/U-02",
 			"worktree": "<worktreeRoot>/U-02",
+			"status": "pending",
+			"mergedAt": null,
+			"review": {
+				"verdict": null,
+				"evidence": null
+			},
+			"deviations": []
+		},
+		{
+			"id": "U-03",
+			"title": "Export route",
+			"wave": 1,
+			"size": "M",
+			"tier": "mid",
+			"model": null,
+			"infrastructural": false,
+			"covers": ["R-02"],
+			"dependsOn": ["U-01"],
+			"writes": [
+				"src/app/api/orders/export/route.ts",
+				"src/app/api/orders/export/route.test.ts"
+			],
+			"uses": ["test database: orders_export_u03"],
+			"reads": [
+				{
+					"path": "src/types/export.ts",
+					"lines": null,
+					"why": "frozen OrderExportRow type and route contract"
+				}
+			],
+			"acceptance": "<test runner> src/app/api/orders/export/route.test.ts",
+			"nonGoals": [
+				"the serializer (U-02 owns it — stub it against the frozen signature)"
+			],
+			"source": null,
+			"branch": "u/<slug>/U-03",
+			"worktree": "<worktreeRoot>/U-03",
+			"status": "pending",
+			"mergedAt": null,
+			"review": {
+				"verdict": null,
+				"evidence": null
+			},
+			"deviations": []
+		},
+		{
+			"id": "U-04",
+			"title": "Export button in the orders toolbar",
+			"wave": 2,
+			"size": "S",
+			"tier": "cheap",
+			"model": null,
+			"infrastructural": false,
+			"covers": ["R-05"],
+			"dependsOn": ["U-01"],
+			"writes": ["src/app/orders/export-button.tsx"],
+			"uses": [],
+			"reads": [
+				{
+					"path": "src/types/export.ts",
+					"lines": null,
+					"why": "frozen route path and error codes"
+				}
+			],
+			"acceptance": "<typecheck> && <test runner> src/app/orders",
+			"nonGoals": ["the route (U-03 owns it)"],
+			"source": null,
+			"branch": "u/<slug>/U-04",
+			"worktree": "<worktreeRoot>/U-04",
 			"status": "pending",
 			"mergedAt": null,
 			"review": {
