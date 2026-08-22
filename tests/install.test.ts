@@ -46,6 +46,24 @@ describe("oh-my-skills install.sh (e2e)", () => {
 			id,
 			`printf '%s\n' '---' 'name: greeting-skill' 'description: A friendly greeting skill' 'by: oh-my-skills' '---' 'Say hello nicely.' > /tmp/remote-repo/src/skills/greeting-skill/SKILL.md`,
 		);
+		// A skill with the optional subdirectories: prose that must ship, a
+		// script that must ship executable, and a co-located test that must not.
+		await exec(
+			id,
+			"mkdir -p /tmp/remote-repo/src/skills/greeting-skill/references /tmp/remote-repo/src/skills/greeting-skill/scripts",
+		);
+		await exec(
+			id,
+			`printf 'Long-form notes.\n' > /tmp/remote-repo/src/skills/greeting-skill/references/notes.md`,
+		);
+		await exec(
+			id,
+			`printf '#!/bin/sh\necho helper\n' > /tmp/remote-repo/src/skills/greeting-skill/scripts/helper.sh && chmod +x /tmp/remote-repo/src/skills/greeting-skill/scripts/helper.sh`,
+		);
+		await exec(
+			id,
+			`printf 'it("runs", () => {});\n' > /tmp/remote-repo/src/skills/greeting-skill/scripts/helper.test.ts`,
+		);
 		await exec(id, "mkdir -p /tmp/remote-repo/src/commands");
 		await exec(
 			id,
@@ -117,6 +135,35 @@ describe("oh-my-skills install.sh (e2e)", () => {
 		);
 		expect(content.output).toContain("by: oh-my-skills");
 		expect(content.output).toContain("Say hello nicely.");
+	});
+
+	// Skill subdirectories ship wholesale, so an installed *.test.ts would end
+	// up in the agent's own skill directory — the same reason only *.sh files
+	// are copied for commands.
+	it("should install skill subdirectories without the co-located tests", async () => {
+		const prose = await exec(
+			id,
+			`cat ${INSTALL}/skills/greeting-skill/references/notes.md`,
+		);
+		expect(prose.output).toBe("Long-form notes.");
+
+		const script = await exec(
+			id,
+			`test -x ${INSTALL}/skills/greeting-skill/scripts/helper.sh && echo executable`,
+		);
+		expect(script.output).toBe("executable");
+
+		const test = await exec(
+			id,
+			`test -e ${INSTALL}/skills/greeting-skill/scripts/helper.test.ts && echo shipped || echo absent`,
+		);
+		expect(test.output).toBe("absent");
+
+		const anyTest = await exec(
+			id,
+			`find ${INSTALL}/skills -name '*.test.*' | wc -l`,
+		);
+		expect(anyTest.output).toBe("0");
 	});
 
 	it("should create Claude symlink pointing to canonical skill", async () => {
