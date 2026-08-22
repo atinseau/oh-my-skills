@@ -42,8 +42,8 @@ Oracles, reviews, verdicts, checkpoints: `references/conformance.md`. Shape, not
 7. Plan time touches git not at all: Forge and Merge write `.oms/plans/<slug>/` and nothing else. Execute creates `plan/<slug>` and worktrees in a sibling directory; the user's checkout is never modified — the one exception is sequential mode on a harness without worktrees, announced before starting. Sequential mode is run from `references/execute.md`, never improvised from this summary.
 8. Workers commit and report. Only the orchestrator merges. A merge conflict is a decomposition bug: abort, reassign the file, re-brief.
 9. The orchestrator is one agent and the run's ceiling: batch merges, gate once per batch, never re-read what a report summarised, never re-verify what an acceptance command proved, update `plan.json` with targeted `jq` writes, commit it once per batch. Artifacts travel as **files**, never pasted into prompts: packs, worker reports, review packages.
-11. Every decision the orchestrator takes on the user's behalf during a run is a **ruling** in `plan.json` — what, why, cost if wrong — and the final report lists them all.
 10. One dated kebab-case slug names the plan directory, the branch and the worktree root.
+11. Every decision the orchestrator takes on the user's behalf during a run is a **ruling** in `plan.json` — what, why, cost if wrong — and the final report lists them all.
 
 ## Profiles
 
@@ -58,6 +58,17 @@ Default `balanced`, and say so. Width is not a profile: take the whole harness c
 
 Oracles run in every profile. The reviewer column is binding.
 
+## Scripts
+
+`audit.sh` and `review-package.sh` ship in `scripts/` **beside this file**, not in the user's project. Resolve that directory once, at emit time, and vendor both into the plan so nothing downstream — execute, resume, a fresh session — has to find the skill again:
+
+```sh
+UP=$(ls -d "$HOME/.oh-my-skills/skills/ultraplan" "$HOME/.claude/skills/ultraplan" 2>/dev/null | head -1)
+mkdir -p .oms/plans/<slug>/scripts && cp "$UP/scripts/"*.sh .oms/plans/<slug>/scripts/ && chmod +x .oms/plans/<slug>/scripts/*
+```
+
+Neither path exists (another harness, another install layout) → use the directory this SKILL.md was loaded from; still unknown → say the audit cannot run and check the plan's invariants by hand. Every later reference is `<plan dir>/scripts/audit.sh` and `<plan dir>/scripts/review-package.sh`. Both need `jq` and `git` on the path.
+
 ## Harness
 
 Ask; do not introspect. Answerable: "can you run several agents at once, each in its own directory?" Not answerable: the exact cap — assume a small number and record which. Model identifiers are verified in this harness or written `unrouted`; never a guessed name.
@@ -71,7 +82,7 @@ Ask; do not introspect. Answerable: "can you run several agents at once, each in
 5. Units by who-writes-which-files; coverage map; `infrastructural` label for wiring, e2e, migrations, docs.
 6. Compile: edges → contracts → acceptance trap → resources → waves → tiers → metrics.
 7. Packs as files under `.oms/plans/<slug>/packs/` (`templates/pack.md`), oracle specifications (`references/conformance.md`), the spec's global constraints copied verbatim into `constraints[]`.
-8. Emit `.oms/plans/<slug>/plan.md` + `plan.json`, run `scripts/audit.sh`, present: metrics line, decisions, inferred requirements, contracts beside the requirement text each encodes. Projected speedup below ~1.5 → sequential plan, keep coverage map, contracts and oracle specs. Offer Execute; never start it unasked.
+8. Emit `.oms/plans/<slug>/plan.md` + `plan.json`, vendor the scripts, run `<plan dir>/scripts/audit.sh plan.json`, present: metrics line, decisions, inferred requirements, contracts beside the requirement text each encodes. Projected speedup below ~1.5 → sequential plan, keep coverage map, contracts and oracle specs. Offer Execute; never start it unasked.
 
 ## Red flags — stop and re-read the rule
 

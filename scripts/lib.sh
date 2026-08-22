@@ -651,11 +651,19 @@ install_skills() {
         local canonical_path="$canonical_dir/SKILL.md"
         mkdir -p "$canonical_dir"
         cp "$skill_dir/SKILL.md" "$canonical_path"
-        for subdir in "$skill_dir"/*/; do
-            if [[ -d "$subdir" ]]; then
-                cp -r "$subdir" "$canonical_dir/"
-            fi
-        done
+        # Subdirectories (references/, templates/, scripts/, …), minus
+        # co-located tests: those are repo-only, like a command's *.test.ts.
+        # A skill's scripts/ ships next to SKILL.md, so anything copied here is
+        # visible to the agent — an installed test file is noise it has to read
+        # past.
+        while IFS= read -r -d '' file; do
+            local rel_path="${file#"$skill_dir"}"
+            local dest="$canonical_dir/$rel_path"
+            mkdir -p "$(dirname "$dest")"
+            cp "$file" "$dest"
+            if [[ "$dest" == *.sh ]]; then chmod +x "$dest"; fi
+        done < <(find "$skill_dir" -mindepth 2 -type f \
+            ! -name "*.test.ts" ! -name "*.test.js" -print0)
         log_success "Installed canonical skill '${CYAN}$skill_name${NC}'"
 
         local skill_description

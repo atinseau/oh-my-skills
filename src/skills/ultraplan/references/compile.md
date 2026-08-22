@@ -123,7 +123,7 @@ projected speedup 36 / 18 = 2.0x · tokens ~3x sequential
 ## 12. Emit and present
 
 - [ ] `templates/plan.md` + `templates/plan.json`; one pack file per unit and per oracle under `.oms/plans/<slug>/packs/<id>.md` per `templates/pack.md`; oracle specs per `references/conformance.md`.
-- [ ] `scripts/audit.sh plan.json` passes; plus by hand: every acceptance command exists in this repo, every pack answers "where do I look?", nothing from the spec is unaccounted for.
+- [ ] Vendor the scripts into `.oms/plans/<slug>/scripts/` (`SKILL.md` § Scripts); `scripts/audit.sh plan.json` from the plan directory passes; plus by hand: every acceptance command exists in this repo, every pack answers "where do I look?", nothing from the spec is unaccounted for.
 - [ ] Present: metrics line · decisions · inferred requirements · wave-0a contracts, each beside the requirement text it encodes.
 - [ ] Offer Execute. Do not start it.
 

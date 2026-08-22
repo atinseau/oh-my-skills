@@ -13,7 +13,8 @@ WT="$(dirname "$REPO")/$(basename "$REPO")-ultraplan/<slug>"
 - [ ] **Capabilities**: concurrent workers (how many), per-worker directories. No concurrency → ordered run, contracts and oracles kept, say so. No directory targeting → sequential mode (below). Never concurrent workers in one shared checkout.
 - [ ] **Test suite** exists; otherwise say the conformance machinery has nothing to stand on and agree a replacement first.
 - [ ] **Model identifiers** exist here; otherwise substitute the harness default and note it.
-- [ ] **Plan valid**: `scripts/audit.sh plan.json`, plus by hand: every acceptance command and gate command exists in this repository (binary, script, test path).
+- [ ] **Tools**: `jq` and `git` on the path — the audit and the review packages need both.
+- [ ] **Plan valid**: `.oms/plans/<slug>/scripts/audit.sh` on `plan.json` (vendored at emit time; re-vendor from the skill if the plan predates it), plus by hand: every acceptance command and gate command exists in this repository (binary, script, test path).
 - [ ] **Ignored files** the worktrees will not carry — list them, then ask the user which the test suite needs:
 
   ```sh
@@ -29,7 +30,7 @@ Outside the repository, sibling directory, absolute paths only. Never reuse an e
 ```sh
 git -C "$REPO" worktree add -b plan/<slug> "$WT/integration" <base-branch>
 mkdir -p "$WT/integration/.oms/plans/<slug>"
-cp "$REPO/.oms/plans/<slug>/"* "$WT/integration/.oms/plans/<slug>/"
+cp -R "$REPO/.oms/plans/<slug>/." "$WT/integration/.oms/plans/<slug>/"
 git -C "$WT/integration" add -f .oms/plans/<slug> && git -C "$WT/integration" commit -m "<slug>: plan"
 ```
 
@@ -127,7 +128,7 @@ git -C "$WT/integration" add -f .oms/plans/<slug> && git -C "$WT/integration" co
 ```
 
 - [ ] Gate: the profile's check + oracles now due. One gate per batch.
-- [ ] Reviews the merges unlocked: units per profile, requirements whose last covering unit landed. One package per unit: `scripts/review-package <WT>/integration plan/<slug>@{before} <merge-commit> <WT>/reviews/<id>.diff -- <write-set>` — the reviewer gets the path, the orchestrator never reads it. `contradicts-spec` → user now, dependents held.
+- [ ] Reviews the merges unlocked: units per profile, requirements whose last covering unit landed. One package per unit: `<plan dir>/scripts/review-package.sh <WT>/integration plan/<slug>@{before} <merge-commit> <WT>/reviews/<id>.diff -- <write-set>` — the reviewer gets the path, the orchestrator never reads it. `contradicts-spec` → user now, dependents held.
 - [ ] Append a ruling to `rulings[]` for every conflict, ambiguity or plan defect you decided this batch.
 - [ ] Write every field the batch changed before committing: `units[].status`, `units[].review`, `units[].deviations`, `requirements[].verdict` + `evidence`, `requirements[].oracle.merged` / `.status`, and `baselineVerdict` when a baseline ran.
 - [ ] `plan.json` committed = the handoff if the session ends.
@@ -146,7 +147,7 @@ git -C "$WT/integration" add -f .oms/plans/<slug> && git -C "$WT/integration" co
 
 ## Finish
 
-1. Full project verification on the integration worktree **and every oracle re-run**, not only those due.
+1. Full project verification on the integration worktree **and every oracle re-run**, not only those due. Then `<plan dir>/scripts/audit.sh plan.json --finish`: no null verdict, every non-pending unit reviewed, every due oracle merged, nothing left running. It fails → the report would have claimed something the state file does not support; fix the state, not the claim.
 2. Report what happened: changes by area · **every ruling** from `rulings[]`, in order, with its cost if wrong — the only place those decisions reach the user · every requirement with verdict and evidence (never blank; Merge: baseline verdict beside it) · what was verified, commands and numbers · what still fails, quoted · what was left out and why · deviations and the unit that introduced them.
 3. Hand over the branch and the diff against the starting branch. Merging, pushing and opening a PR are the user's.
 

@@ -92,7 +92,10 @@ by: oh-my-skills
 - `by: oh-my-skills` is required — ownership marker used by uninstall
 - Cross-LLM compatible: only standard frontmatter fields (`name`, `description`, `by`). No Claude Code-specific fields (`disable-model-invocation`, `user-invocable`, `allowed-tools`, `context`)
 - No Claude Code-only syntax like `` !`command` `` — write explicit instructions for the agent to run commands
-- Skills are not unit tested — quality relies on SKILL.md content
+- Skill prose is not unit tested — quality relies on SKILL.md content
+- Executable helpers under `scripts/` **are** tested: co-located `<name>.test.ts`, same Docker infra as commands and hooks. A guard that silently matches nothing reads as "invariant holds" — that is precisely what the tests exist to catch
+- Co-located tests stay in the repo: `install_skills` copies every subdirectory file except `*.test.ts` / `*.test.js`, and marks `*.sh` executable. A skill's `scripts/` sits beside SKILL.md, so anything installed there is content the agent reads
+- A skill's scripts live beside SKILL.md, not in the user's project. SKILL.md must say how to resolve that directory; ultraplan vendors them into the plan directory at emit time so nothing downstream re-resolves it
 
 ## Contributing: Writing a Command
 
@@ -140,7 +143,8 @@ src/hooks/<name>/
 | Lifecycle scripts (install, uninstall, update) | `tests/*.test.ts` | End-to-end integration in Alpine Docker containers |
 | Shell commands | `src/commands/<name>/<name>.test.ts` | Co-located tests, same Docker infra |
 | Hook scripts | `src/hooks/<name>/hook.test.ts` | Co-located tests, same Docker infra |
-| Skills | Not tested | Quality relies on SKILL.md content |
+| Skill prose (SKILL.md, references, templates) | Not tested | Quality relies on SKILL.md content |
+| Skill scripts | `src/skills/<name>/scripts/<name>.test.ts` | Co-located tests, same Docker infra |
 
 **Test infrastructure:**
 - All tests run in Alpine containers via **testcontainers** (Docker required)
