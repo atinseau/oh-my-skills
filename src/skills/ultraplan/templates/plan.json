@@ -36,7 +36,13 @@
 			"M": 3,
 			"L": 5
 		},
-		"note": "No verdict is null in a finished run: held/dropped lineage \u2192 'not satisfied \u2014 blocked by U-xx'; a unit that never merged \u2192 'not reviewed' with what happened as evidence. 'running' is written at launch. A split yields U-xxa/U-xxb replacing the original in requirements[].units."
+		"note": "No verdict is null in a finished run: held/dropped lineage \u2192 'not satisfied \u2014 blocked by U-xx'; a unit that never merged \u2192 'not reviewed' with what happened as evidence. 'running' is written at launch. A split yields U-xxa/U-xxb replacing the original in requirements[].units.",
+		"rulingShape": {
+			"what": "",
+			"why": "",
+			"costIfWrong": "",
+			"at": "<unit id or gate>"
+		}
 	},
 	"harness": {
 		"parallelWorkers": true,
@@ -77,12 +83,17 @@
 		"worthFanningOut": false,
 		"note": "baseline = sum of baselineBreakdown on the S=2/M=3/L=5 scale, sized per requirement BEFORE decomposition, never from units; lane = batches \u00d7 ~0.4, more at max"
 	},
+	"constraints": [
+		"No new dependencies",
+		"Node 20+; no Bun-only APIs in src/lib"
+	],
 	"decisions": [
 		{
 			"text": "Amounts serialized as decimal strings, never floats",
 			"from": "convention: src/lib/export/invoices-csv.ts"
 		}
 	],
+	"rulings": [],
 	"requirements": [
 		{
 			"id": "R-02",

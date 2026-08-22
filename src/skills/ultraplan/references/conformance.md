@@ -29,7 +29,7 @@ Triggers are merges, never a clock. Reviewers are separate agents on the integra
 
 ## Reviewers
 
-Brief per `templates/briefs.md#reviewer`: the requirement or brief in its original words, the diff scoped to the unit's merge commit or declared write-set, the contracts it consumes. At `light`, one session per batch, still one scoped diff per unit. Withhold the implementer's report and rationale. Name the failure mode: the test may encode the same misunderstanding as the code. Context is a diff and a paragraph, never the codebase. `balanced` reviews only the units the profile names.
+Brief per `templates/briefs.md#reviewer`: the requirement or brief in its original words, `constraints[]`, the contracts it consumes, and the **review package** — one file written by `scripts/review-package` (commits, stat, diff `-U10` scoped to the declared write-set) that the reviewer reads in one call. At `light`, one session per batch, still one package per unit. Withhold the implementer's report and rationale. The reviewer's lens is **Missing / Extra / Misunderstood** → `partial` / `out-of-bounds` / `contradicts-spec`; it treats any claim it cannot see in the diff as unverified; it returns `⚠️ cannot verify: <what>` for a requirement that lives outside the diff, and the orchestrator resolves each one itself before writing the verdict. The orchestrator never pre-judges a finding: a brief containing "do not flag", "at most minor" or "the plan chose" is a brief written to avoid a review. Context is a package and a paragraph, never the codebase. `balanced` reviews only the units the profile names.
 
 ## Verdicts
 
@@ -44,6 +44,10 @@ evidence: <what in the diff satisfies it, or precisely what is missing>
 - `out-of-bounds` → decided by the orchestrator **before merging** (changed paths vs write-set), not by a reviewer.
 - Verdicts accumulate in `plan.json` as they arrive. Report and state file never disagree.
 - **Never null** in a finished run: held or dropped lineage → `not satisfied — blocked by U-xx` for every requirement it covers, immediately; the unit → `not reviewed`, evidence `dropped` or `held behind U-xx`.
+
+## Rulings
+
+A conflict, ambiguity or plan defect found during execution is decided by the orchestrator, never parked on a question — the spec is the authority, the plan its argument — and every such decision is appended to `rulings[]`: `{ "what", "why", "costIfWrong", "at": "<unit or gate>" }`. Three things still stop the run: a contract revision after merges (checkpoint 4), a requirement change (the user's), and a plan so broken that every path is a guess.
 
 ## Spec turns out wrong
 
