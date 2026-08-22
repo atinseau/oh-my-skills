@@ -43,6 +43,11 @@ parse_args() {
         "--background-fetch")
             MODE="background"
             ;;
+        "--apply")
+            # Internal: the second half of an update, re-entered from the code
+            # the first half just pulled. Not meant to be run by hand.
+            MODE="apply"
+            ;;
         *)
             log_error "Unknown option: ${1}"
             exit 1
@@ -221,16 +226,47 @@ print_changelog() {
     done <<< "$commit_titles"
 }
 
-perform_update() {
+# Hand the rest of the update to the code that was just pulled.
+#
+# This process loaded lib.sh — and this very script — from the version being
+# replaced. Everything after the pull (install_skills, clean_dev_files, the
+# shell wiring) must run from the new code, or a fix to the install path only
+# takes effect one update later: the release that ships it installs itself with
+# the previous release's logic.
+#
+# The library is re-sourced unconditionally, which is enough for core changes.
+# The updater itself is re-entered only when the new one advertises --apply, so
+# updating from a version that predates this handover degrades to re-sourcing
+# rather than failing on an unknown option.
+resume_from_new_code() {
     local local_version="$1"
     local remote_version="$2"
+    local commit_titles="$3"
+    local lib="$INSTALL_DIR/scripts/lib.sh"
+    local updater="$INSTALL_DIR/scripts/update.sh"
 
-    echo ""
-    log_info "Updating oh-my-skills..."
-    fetch_repo_metadata
-    local commit_titles
-    commit_titles=$(get_commit_titles_since_release "$local_version" "$remote_version")
-    update_repo "$remote_version"
+    if [[ -f "$lib" ]]; then
+        # shellcheck disable=SC1090
+        source "$lib"
+    fi
+
+    if [[ -z "${OMS_UPDATE_APPLY:-}" && -f "$updater" ]] && grep -q '^ *"--apply")' "$updater"; then
+        OMS_UPDATE_APPLY=1 \
+        OMS_UPDATE_FROM="$local_version" \
+        OMS_UPDATE_TO="$remote_version" \
+        OMS_UPDATE_CHANGELOG="$commit_titles" \
+        REPO_URL="$REPO_URL" \
+            exec bash "$updater" --apply
+    fi
+}
+
+# Everything an update does once the new code is in place. Reached either by
+# falling through resume_from_new_code, or as --apply in the re-entered script.
+finish_update() {
+    local local_version="$1"
+    local remote_version="$2"
+    local commit_titles="$3"
+
     apply_update
 
     # Invalidate cache after a successful update so next auto-check re-fetches cleanly
@@ -248,10 +284,33 @@ perform_update() {
     echo ""
 }
 
+perform_update() {
+    local local_version="$1"
+    local remote_version="$2"
+
+    echo ""
+    log_info "Updating oh-my-skills..."
+    fetch_repo_metadata
+    local commit_titles
+    commit_titles=$(get_commit_titles_since_release "$local_version" "$remote_version")
+    update_repo "$remote_version"
+    resume_from_new_code "$local_version" "$remote_version" "$commit_titles"
+    finish_update "$local_version" "$remote_version" "$commit_titles"
+}
+
 # ─── Main logic ───────────────────────────────────────────────────────────────
 
 main() {
     parse_args "${1:-}"
+
+    # ── Apply mode: the tail of an update, running from the freshly pulled
+    # code. The checks and the prompt already happened in the parent process. ──
+    if [[ "$MODE" == "apply" ]]; then
+        finish_update "${OMS_UPDATE_FROM:-unknown}" \
+            "${OMS_UPDATE_TO:-$(get_version)}" \
+            "${OMS_UPDATE_CHANGELOG:-}"
+        exit 0
+    fi
 
     # ── Background fetch mode: silent, only writes cache, then exits ──
     if [[ "$MODE" == "background" ]]; then

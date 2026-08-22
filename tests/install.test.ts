@@ -263,6 +263,38 @@ describe("oh-my-skills install.sh (e2e)", () => {
 		expect(settings.output).toBe("absent");
 	});
 
+	// Re-running the installer over an existing install used to be a silent
+	// no-op: clean_dev_files prunes src/ and package.json after every run, HEAD
+	// sits detached on a release tag so `git pull` had no upstream to follow,
+	// and nothing restored the pruned checkout — so install_skills found no
+	// src/skills and left the previous install untouched.
+	it("should repair an install whose checkout was pruned", async () => {
+		await exec(id, `rm -rf ${INSTALL}/skills/greeting-skill`);
+		expect(
+			(await exec(id, `test -d ${INSTALL}/src && echo exists || echo pruned`))
+				.output,
+		).toBe("pruned");
+
+		const r = await exec(
+			id,
+			`REPO_URL=/tmp/remote-repo bash /scripts/install.sh`,
+		);
+		expect(r.exitCode).toBe(0);
+		expect(r.output).toContain("Refreshing");
+		// The version is read from package.json, which only exists if the
+		// checkout was restored before the install ran.
+		expect(r.output).not.toContain("vunknown");
+
+		expect(
+			(
+				await exec(
+					id,
+					`test -f ${INSTALL}/skills/greeting-skill/SKILL.md && echo ok`,
+				)
+			).output,
+		).toBe("ok");
+	});
+
 	describe("clean reinstall", () => {
 		it("should remove skills deleted from the repo on reinstall", async () => {
 			// Verify greeting-skill is installed from previous tests
@@ -279,9 +311,14 @@ describe("oh-my-skills install.sh (e2e)", () => {
 				).output,
 			).toBe("ok");
 
-			// Simulate a repo update that removed greeting-skill:
-			// src/ was cleaned by clean_dev_files, recreate it without greeting-skill
-			await exec(id, `mkdir -p ${INSTALL}/src/skills`);
+			// Simulate a release that renamed the skill. Doing it in the remote
+			// rather than by hand in the install dir is the point: the installer
+			// refreshes its own checkout, so a src/ patched locally would just be
+			// overwritten.
+			await exec(
+				id,
+				"cd /tmp/remote-repo && git mv src/skills/greeting-skill src/skills/farewell-skill && git add -A && git commit -m 'chore: rename greeting-skill'",
+			);
 
 			// Reinstall over existing install dir
 			const r = await exec(
@@ -299,6 +336,16 @@ describe("oh-my-skills install.sh (e2e)", () => {
 					)
 				).output,
 			).toBe("gone");
+
+			// ...and the renamed one installed in its place
+			expect(
+				(
+					await exec(
+						id,
+						`test -f ${INSTALL}/skills/farewell-skill/SKILL.md && echo ok`,
+					)
+				).output,
+			).toBe("ok");
 
 			// Claude symlink should be gone too
 			expect(

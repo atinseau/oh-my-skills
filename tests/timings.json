@@ -1,18 +1,18 @@
 {
 	"version": 1,
 	"files": {
-		"src/commands/never-sleep/never-sleep.test.ts": 11306,
-		"tests/lib.test.ts": 6999,
-		"src/skills/ultraplan/scripts/audit.test.ts": 5407,
-		"src/commands/oms-run-all/oms-run-all.test.ts": 4543,
-		"src/commands/oms-git-diff/oms-git-diff.test.ts": 3555,
-		"tests/uninstall.test.ts": 3499,
-		"tests/install.test.ts": 3330,
-		"tests/update.test.ts": 3162,
-		"src/commands/oms-cli/oms-cli.test.ts": 2965,
-		"tests/hooks.test.ts": 2577,
-		"src/skills/ultraplan/scripts/review-package.test.ts": 2417,
-		"tests/hooks-cli.test.ts": 2202,
-		"src/hooks/handoff/hook.test.ts": 1404
+		"src/commands/never-sleep/never-sleep.test.ts": 12948,
+		"tests/lib.test.ts": 6902,
+		"src/skills/ultraplan/scripts/audit.test.ts": 4869,
+		"src/commands/oms-run-all/oms-run-all.test.ts": 4282,
+		"src/commands/oms-git-diff/oms-git-diff.test.ts": 3850,
+		"tests/uninstall.test.ts": 3076,
+		"tests/install.test.ts": 2390,
+		"src/hooks/handoff/hook.test.ts": 2299,
+		"tests/hooks-cli.test.ts": 2160,
+		"tests/update.test.ts": 2096,
+		"src/commands/oms-cli/oms-cli.test.ts": 1871,
+		"tests/hooks.test.ts": 1218,
+		"src/skills/ultraplan/scripts/review-package.test.ts": 1054
 	}
 }
