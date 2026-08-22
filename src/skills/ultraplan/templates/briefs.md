@@ -38,10 +38,13 @@ universally quantified>. File: <path>. Commit on <branch>; do not merge.
 
 ## reviewer — one scoped diff per unit
 
-Give: the requirement or brief in the words it was written · `constraints[]` verbatim · the contracts it consumes · the path of the review package written by `scripts/review-package` (commits, stat, diff `-U10` scoped to the write-set). Withhold the implementer's report and rationale. Never add "do not flag", "at most minor" or "the plan chose" — let the finding come and rule on it in `rulings[]`. At `light`, one session per batch, still one package per unit.
+Give: the requirement or brief in the words it was written · `constraints[]` verbatim · the contracts it consumes · the path of the review package written by `<plan dir>/scripts/review-package.sh` (a header, commits, stat, and a diff scoped to the write-set — `-U10`, dropped to `-U3` when the full-context diff is too big to read in one call, which the header states). Withhold the implementer's report and rationale. Never add "do not flag", "at most minor" or "the plan chose" — let the finding come and rule on it in `rulings[]`. At `light`, one session per batch, still one package per unit.
 
 ```
 Read the review package at <path> once: it is your whole view of the change.
+Its header says how big it is. If the header says it was reduced or is too
+large to read in one call, put that first on the "cannot verify" line — do not
+review a fraction and report a clean verdict.
 Judge it against the requirement and constraints below, not against its tests —
 the test may encode the same misunderstanding as the code. Anything not visible
 in the diff is an unverified claim. Look for what is Missing (→ partial or not
