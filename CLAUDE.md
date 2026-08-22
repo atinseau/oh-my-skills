@@ -188,6 +188,14 @@ src/hooks/<name>/
 - `update.sh` compares git tags to detect new versions, displays commit titles as changelog
 - **GitHub workflows (`.github/workflows/`):** `pr-checks.yml` (PR checks), `release.yml` (release publishing)
 
+## Update Resilience
+
+The updater replaces the code it is running from, so the second half of an update must not use the first half's definitions:
+
+- `update.sh` re-sources `lib.sh` after the pull and re-enters itself as `update.sh --apply` (an internal mode) when the pulled updater advertises it. A change to the install path therefore takes effect in the release that ships it, not the one after. Updating from a version predating the handover degrades to re-sourcing the library.
+- `clean_dev_files` prunes `src/`, `tests/` and `package.json` after every run, and HEAD sits detached on a release tag. Anything that reads from `src/` must restore the checkout first (`git checkout -- .` then an explicit `git checkout <ref>`) — `git pull` has no upstream to follow and restores nothing.
+- Test a change to the install path by patching `lib.sh` **and** `update.sh` in the fixture remote and asserting each leaves a marker (see `tests/update.test.ts`). Markers must live outside `INSTALL_DIR`, which `clean_dev_files` prunes to its whitelist.
+
 ## Conventions
 
 - Scripts use `jq` when available, with `sed`/`grep` fallbacks for systems without it

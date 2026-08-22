@@ -16,6 +16,9 @@ const CACHE_FILE = `${INSTALL}/.update-cache`;
 // A semver strictly greater than VERSION — used for "remote has new version" scenarios.
 // Derived from VERSION so it stays valid after release bumps.
 const NEW_VERSION = `${Number(VERSION.split(".")[0]) + 1}.0.0`;
+// One higher again, for the core-change scenario that must run last among the
+// update flows: it rewrites lib.sh and update.sh in the remote.
+const CORE_VERSION = `${Number(VERSION.split(".")[0]) + 2}.0.0`;
 
 describe("oh-my-skills Update (real script)", () => {
 	let container: StartedTestContainer;
@@ -278,6 +281,59 @@ describe("oh-my-skills Update (real script)", () => {
 			`test -x ${INSTALL}/hooks/sample-hook/hook.sh && echo ok`,
 		);
 		expect(script.output).toBe("ok");
+	});
+
+	// ── Resilience to core code changes ─────────────────────────────────
+	//
+	// update.sh sources lib.sh, pulls, then installs. Before the handover, the
+	// install ran from the definitions loaded *before* the pull, so a release
+	// fixing install_skills installed itself with the previous release's logic
+	// and the fix only landed one update later. v3 patches both halves of the
+	// core — the library and the updater — and each leaves a marker only the
+	// newly pulled code can write. Markers live outside INSTALL, which
+	// clean_dev_files prunes down to its whitelist at the end of every run.
+
+	it("runs the pulled lib.sh and the pulled update.sh, not the ones it started with", async () => {
+		const setup = await exec(
+			id,
+			`(${[
+				"cd /tmp/remote-repo",
+				`printf '\\ninstall_commands() { mkdir -p "$COMMANDS_DIR"; echo v3 > /tmp/core-marker; log_success "Commands copied to $COMMANDS_DIR"; }\\n' >> scripts/lib.sh`,
+				`sed -i 's|^load_lib$|load_lib\\necho v3 > /tmp/driver-marker|' scripts/update.sh`,
+				"git add . && git commit -m 'chore: change the core install path'",
+				`git tag v${CORE_VERSION}`,
+			].join(" && ")}) 2>&1`,
+		);
+		expect(setup.exitCode).toBe(0);
+
+		await exec(id, "rm -f /tmp/core-marker /tmp/driver-marker");
+
+		// The user always runs the *installed* updater — the one the pull
+		// replaces underneath the running process.
+		const r = await exec(
+			id,
+			`echo y | REPO_URL=/tmp/remote-repo bash ${INSTALL}/scripts/update.sh --manual`,
+		);
+		expect(r.exitCode).toBe(0);
+		expect(r.output).toContain("Update Complete");
+
+		const core = await exec(id, "cat /tmp/core-marker");
+		expect(core.output).toBe("v3");
+
+		const driver = await exec(id, "cat /tmp/driver-marker");
+		expect(driver.output).toBe("v3");
+	});
+
+	it("runs the tail of the update exactly once across the handover", async () => {
+		// The handover is an exec, not a call: the parent must not also run
+		// apply_update after the child returns.
+		const r = await exec(
+			id,
+			`echo y | REPO_URL=/tmp/remote-repo bash ${INSTALL}/scripts/update.sh --manual`,
+		);
+		expect(r.output.split("Update Complete").length - 1).toBe(1);
+		expect(r.output.split("Commands copied to").length - 1).toBe(1);
+		expect(r.output.split("Shell sourcing script updated").length - 1).toBe(1);
 	});
 
 	// ── Auto-check with short TTL ───────────────────────────────────────

@@ -37,11 +37,23 @@ require_git() {
 
 clone_repo() {
     if [[ -d "$INSTALL_DIR/.git" ]]; then
-        log_warning "Already installed. Updating..."
+        log_warning "Already installed. Refreshing..."
         cd "$INSTALL_DIR"
-        local branch
-        branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "main")
-        git pull origin "$branch" 2>/dev/null || log_warning "Could not update repository"
+        # clean_dev_files deletes tracked files (src/, tests/, package.json)
+        # after every run, so the checkout is deliberately incomplete between
+        # installs: restore it before anything reads from src/. And HEAD is
+        # usually detached at a release tag, so `git pull` has no upstream to
+        # follow — fetch, then move to the requested ref explicitly.
+        git checkout -- . 2>/dev/null || log_warning "Could not restore the checkout"
+        git fetch origin --tags --force 2>/dev/null || log_warning "Could not fetch repository"
+        local target_tag="${TAG:-$DEFAULT_TAG}"
+        if [[ -n "$target_tag" ]] && git checkout "$target_tag" 2>/dev/null; then
+            log_success "Repository refreshed (${CYAN}$target_tag${NC})"
+        elif git checkout FETCH_HEAD 2>/dev/null; then
+            log_success "Repository refreshed"
+        else
+            log_warning "Could not update repository; reinstalling the current checkout"
+        fi
     else
         local target_tag="${TAG:-$DEFAULT_TAG}"
         if [[ -n "$target_tag" ]]; then
