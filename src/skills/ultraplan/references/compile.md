@@ -13,7 +13,7 @@ Input: a spec, PRD or issue (Forge), or one or more plans (Merge — see the del
 
 ## 2. Requirements
 
-- [ ] Rewrite the spec as a flat numbered list `R-01 …`, each verifiable.
+- [ ] Rewrite the spec as a flat numbered list `R-01 …`. One requirement = one behavior a user could accept or reject at one boundary; clauses of a spec bullet that are checked by the same test stay in one requirement. A feature yields four to ten.
 - [ ] Implied-but-unstated requirements (auth, error and empty states, i18n, telemetry) get ids, marked `inferred`.
 - [ ] Independent re-extraction: a separate agent, the spec alone, no sight of your list (`templates/briefs.md`). Diff. Anything only one side found is a miss or an inferred requirement to state.
 
@@ -85,7 +85,7 @@ Compiled:
 
 - [ ] Shared registry files — barrels, route registries, i18n bundles, DI containers, changelogs — belong to **one wiring unit, one wave later**; the parallel wave stays out.
 - [ ] Every unit declares `uses` **positively**: how its acceptance reaches shared state, or `[]` meaning "touches none". Audit question: does any unit run tests against a database, port or browser without declaring one?
-- [ ] Resources: ports, test databases, seeded fixtures, external sandboxes, browser profiles, build caches and artifact directories with an exclusive lock.
+- [ ] Resources: ports, test databases, seeded fixtures, external sandboxes, browser profiles, build caches and artifact directories with an exclusive lock, append-only files (audit logs, counters). A unit's tests must pass twice in a row on the same checkout: gates re-run the suite.
 - [ ] Parameterise first — database name or schema from an env var, port offset per unit, transaction rolled back per test — then declare exclusive only what cannot be shared. Whatever collapse remains goes into the projected width before a speedup is quoted.
 - [ ] A resource collision schedules exactly like a file collision. It is re-checked at execute time when worktrees are created.
 
@@ -114,7 +114,7 @@ critical path 15 (S,L,M,L) · cap adjustment +1 · orchestrator lane 2
 projected speedup 36 / 18 = 2.0x · tokens ~3x sequential
 ```
 
-- **Baseline** — computed **before decomposing**, from the requirement list: size each requirement S/M/L as if one agent did it end to end, sum, add the work any cut pays (migration, wiring, e2e, docs). Never summed from the plan's units.
+- **Baseline** — computed **before decomposing**, from the requirement list: size each requirement S/M/L as if one agent did it end to end, sum, add the work any cut pays (migration, wiring, e2e, docs). Never summed from the plan's units. Record the per-requirement sizes in `metrics.baselineBreakdown` so the number can be contested line by line.
 - **Denominator** — critical path against the cap **+ orchestrator lane**: ~0.4 effort per merge batch and per gate (typecheck + affected tests; more for a full suite) + any unit kept in the orchestrator + Merge-mode baseline oracles. Past ~20 units the lane dominates: fewer, larger batches or a lighter gate, never more width.
 - **Report** — the adjusted figure, never the raw ratio; tokens and wall-clock separately; between ~1.2 and 1.8 a range and "close"; a single confident figure only when the band is cleared comfortably; human latency (the contracts checkpoint) and retries stated as outside the number.
 - **Decline** — below ~1.5: sequential plan, keep coverage map, contracts, oracle specs; drop only the wave structure and per-unit worktrees. Near 1.0: look again for interface edges marked true. Never split finer to move the number.

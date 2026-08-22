@@ -19,7 +19,7 @@ Decline the fan-out when any of these holds:
 5. no test suite worth the name
 6. the user is token-constrained rather than time-constrained
 
-Judge 2 and 3 from the spec and a glance at the files it names — not a full reconnaissance — and revisit them after reconnaissance if the plan goes ahead. On a decline, hand over a **sequential plan**: numbered requirements with inferred ones marked · steps in dependency order, each with the files it touches and the command that proves it · interfaces worth deciding up front, stated inline · one sentence naming the criterion that triggered. No branch, no worktree, no `plan.json`. The speedup check at the end of compilation is a backstop, not this decision.
+Judge 2 and 3 from the spec and a glance at the files it names — not a full reconnaissance — and revisit them after reconnaissance if the plan goes ahead. On a decline, hand over a **sequential plan**: numbered requirements with inferred ones marked · steps in dependency order, each with the files it touches and the command that proves it · interfaces worth deciding up front, stated inline · one sentence naming the criterion that triggered. No branch, no worktree, no `plan.json`. The speedup check at the end of compilation is a backstop, not this decision. If the user disputes the criterion, compile in full and report the honest number, even below 1.
 
 ## Modes
 
