@@ -29,7 +29,7 @@ R-04  Every export is written to an audit log with user id and row count
 - [ ] Explorers, one area each, briefed with `templates/briefs.md#explorer`: files that change (paths), the convention with **one exemplar and 15–30 quoted lines with real line numbers**, the verifying command read from the project's config. Under 200 words of prose. No reading outside the area, no line range not opened.
 - [ ] Note anything in the spec the codebase contradicts.
 - [ ] Meanwhile: finish the requirement list, sketch the likely contracts.
-- [ ] Revisit step 0 criteria 2 and 3 now.
+- [ ] Revisit step 0 criteria 2 and 3 now, with the baseline breakdown in hand.
 
 ## 4. Units
 
